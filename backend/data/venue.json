@@ -1,0 +1,16 @@
+{
+  "venue_name": "Ohio Stadium",
+  "capacity": 102780,
+  "concessions": {
+    "stands_total": 65,
+    "default_stands_open_pct": 85,
+    "default_staff_per_stand": 6,
+    "service_rate_customers_per_staff_per_min": 0.55,
+    "express_lane_service_boost_pct": 12
+  },
+  "crowd": {
+    "default_crowd_energy": 72
+  }
+}
+
+

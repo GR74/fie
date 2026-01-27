@@ -1,0 +1,99 @@
+{
+  "presets": [
+    {
+      "id": "max_atmosphere",
+      "name": "Max Atmosphere",
+      "description": "Maximize crowd energy and student presence for ultimate home field advantage",
+      "icon": "🔥",
+      "color": "#bb0000",
+      "overrides": {
+        "attendance": 102780,
+        "student_ratio": 0.26,
+        "crowd_energy": 95,
+        "stands_open_pct": 100,
+        "staff_per_stand": 8,
+        "promotion_type": "rivalry_hype"
+      }
+    },
+    {
+      "id": "revenue_focus",
+      "name": "Revenue Focus",
+      "description": "Optimize concessions and premium seating for maximum revenue",
+      "icon": "💰",
+      "color": "#22c55e",
+      "overrides": {
+        "attendance": 98000,
+        "student_ratio": 0.18,
+        "crowd_energy": 70,
+        "stands_open_pct": 95,
+        "staff_per_stand": 10,
+        "express_lanes": true,
+        "promotion_type": "alumni_night"
+      }
+    },
+    {
+      "id": "balanced",
+      "name": "Balanced",
+      "description": "Balance atmosphere, operations, and revenue for optimal game day",
+      "icon": "⚖️",
+      "color": "#f59e0b",
+      "overrides": {
+        "attendance": 100000,
+        "student_ratio": 0.22,
+        "crowd_energy": 80,
+        "stands_open_pct": 90,
+        "staff_per_stand": 7,
+        "promotion_type": "none"
+      }
+    },
+    {
+      "id": "conservative",
+      "name": "Conservative",
+      "description": "Minimize operational risk with comfortable staffing levels",
+      "icon": "🛡️",
+      "color": "#6b7280",
+      "overrides": {
+        "attendance": 95000,
+        "student_ratio": 0.20,
+        "crowd_energy": 65,
+        "stands_open_pct": 100,
+        "staff_per_stand": 10,
+        "express_lanes": true,
+        "early_arrival_promo": true,
+        "promotion_type": "family_bundle"
+      }
+    },
+    {
+      "id": "student_rush",
+      "name": "Student Rush",
+      "description": "Pack the student section for maximum noise",
+      "icon": "🎓",
+      "color": "#bb0000",
+      "overrides": {
+        "attendance": 102780,
+        "student_ratio": 0.30,
+        "crowd_energy": 100,
+        "stands_open_pct": 85,
+        "staff_per_stand": 6,
+        "promotion_type": "student_push"
+      }
+    },
+    {
+      "id": "ops_safe",
+      "name": "Ops Safe",
+      "description": "Ensure smooth operations with no queue overloads",
+      "icon": "✅",
+      "color": "#22c55e",
+      "overrides": {
+        "attendance": 90000,
+        "student_ratio": 0.20,
+        "crowd_energy": 70,
+        "stands_open_pct": 100,
+        "staff_per_stand": 12,
+        "express_lanes": true,
+        "early_arrival_promo": true
+      }
+    }
+  ]
+}
+

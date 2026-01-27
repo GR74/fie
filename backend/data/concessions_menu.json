@@ -1,0 +1,22 @@
+{
+  "segments": {
+    "student": {
+      "per_cap_spend_usd": 7.25,
+      "gross_margin_pct": 62
+    },
+    "nonstudent": {
+      "per_cap_spend_usd": 14.25,
+      "gross_margin_pct": 64
+    }
+  },
+  "adjustments": {
+    "cold_weather_spend_boost_pct": 4,
+    "night_game_spend_boost_pct": 3,
+    "student_push_spend_drop_pct": 6,
+    "family_bundle_spend_drop_pct": 4,
+    "alumni_night_spend_boost_pct": 2,
+    "rivalry_hype_spend_boost_pct": 3
+  }
+}
+
+
