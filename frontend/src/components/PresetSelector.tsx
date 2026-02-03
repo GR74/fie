@@ -113,15 +113,22 @@ const PRESETS: Preset[] = [
 interface PresetSelectorProps {
   onApply: (overrides: Record<string, unknown>) => void;
   className?: string;
+  hideStudentRatio?: boolean;
 }
 
-export function PresetSelector({ onApply, className = "" }: PresetSelectorProps) {
+export function PresetSelector({ onApply, className = "", hideStudentRatio = false }: PresetSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const handleSelect = (preset: Preset) => {
     setSelectedId(preset.id);
-    onApply(preset.overrides);
+    if (hideStudentRatio) {
+      const next = { ...preset.overrides } as Record<string, unknown>;
+      delete next.student_ratio;
+      onApply(next);
+    } else {
+      onApply(preset.overrides);
+    }
     setIsOpen(false);
     
     // Reset selection indicator after animation
@@ -239,7 +246,7 @@ export function PresetSelector({ onApply, className = "" }: PresetSelectorProps)
 }
 
 // Compact preset buttons for inline use
-export function PresetButtons({ onApply, className = "" }: PresetSelectorProps) {
+export function PresetButtons({ onApply, className = "", hideStudentRatio = false }: PresetSelectorProps) {
   const quickPresets = PRESETS.slice(0, 4); // First 4 presets
   
   return (
@@ -247,7 +254,15 @@ export function PresetButtons({ onApply, className = "" }: PresetSelectorProps) 
       {quickPresets.map((preset) => (
         <motion.button
           key={preset.id}
-          onClick={() => onApply(preset.overrides)}
+          onClick={() => {
+            if (hideStudentRatio) {
+              const next = { ...preset.overrides } as Record<string, unknown>;
+              delete next.student_ratio;
+              onApply(next);
+            } else {
+              onApply(preset.overrides);
+            }
+          }}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
           style={{
             background: `${preset.color}15`,
@@ -267,4 +282,3 @@ export function PresetButtons({ onApply, className = "" }: PresetSelectorProps) 
     </div>
   );
 }
-

@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 
 import { getGame, simulateGame } from "@/lib/api";
+import { isProfessionalGame } from "@/lib/sports";
 import { parseOverridesFromSearchParams } from "@/lib/scenarioUrl";
 import { Chip, GlassButton, GlassCard } from "@/components/ui/glass";
 import { useQuery } from "@tanstack/react-query";
@@ -40,6 +41,7 @@ export default function EngineReportPage() {
 
   const g = gameQuery.data?.game;
   const sim = simQuery.data;
+  const showStudentRatio = !isProfessionalGame(g);
 
   return (
     <div className="space-y-6">
@@ -117,10 +119,12 @@ export default function EngineReportPage() {
             <div className="text-sm font-semibold">Scenario inputs</div>
             <div className="mt-3 grid gap-2 text-sm">
               <Row label="Attendance" value={(overrides.attendance ?? g?.baseline_attendance ?? 0).toLocaleString()} />
-              <Row
-                label="Student ratio"
-                value={`${(((overrides.student_ratio ?? g?.baseline_student_ratio ?? 0) as number) * 100).toFixed(1)}%`}
-              />
+              {showStudentRatio ? (
+                <Row
+                  label="Student ratio"
+                  value={`${(((overrides.student_ratio ?? g?.baseline_student_ratio ?? 0) as number) * 100).toFixed(1)}%`}
+                />
+              ) : null}
               <Row label="Crowd energy" value={`${overrides.crowd_energy ?? 78}/100`} />
               <Row label="Promotion" value={overrides.promotion_type ?? g?.baseline_promotion_type ?? "none"} />
               <Row label="Stands open" value={`${overrides.stands_open_pct ?? 85}%`} />
@@ -240,5 +244,4 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 

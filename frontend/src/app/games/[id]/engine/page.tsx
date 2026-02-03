@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 
 import { getGame, simulateGame } from "@/lib/api";
+import { isProfessionalGame } from "@/lib/sports";
 import { parseOverridesFromSearchParams } from "@/lib/scenarioUrl";
 import { Chip, GlassCard, GlassSectionTitle } from "@/components/ui/glass";
 import { useQuery } from "@tanstack/react-query";
@@ -36,6 +37,7 @@ export default function EnginePage() {
 
   const g = gameQuery.data?.game;
   const sim = simQuery.data;
+  const showStudentRatio = !isProfessionalGame(g);
 
   return (
     <div className="space-y-6">
@@ -65,13 +67,16 @@ export default function EnginePage() {
 
           <div className="mt-4 space-y-2 text-sm">
             <KV label="Attendance" value={(overrides.attendance ?? g?.baseline_attendance ?? 0).toLocaleString()} />
-            <KV
-              label="Student ratio"
-              value={`${(((overrides.student_ratio ?? g?.baseline_student_ratio ?? 0) as number) * 100).toFixed(1)}%`}
-            />
+            {showStudentRatio ? (
+              <KV
+                label="Student ratio"
+                value={`${(((overrides.student_ratio ?? g?.baseline_student_ratio ?? 0) as number) * 100).toFixed(1)}%`}
+              />
+            ) : null}
             <KV label="Crowd energy" value={`${overrides.crowd_energy ?? 78}/100`} />
             <KV label="Promotion" value={overrides.promotion_type ?? g?.baseline_promotion_type ?? "none"} />
             <KV label="Stands open" value={`${overrides.stands_open_pct ?? 85}%`} />
+            <KV label="Seats open" value={`${overrides.seats_open_pct ?? 100}%`} />
             <KV label="Staff/stand" value={`${overrides.staff_per_stand ?? 6}`} />
             <KV label="Express lanes" value={String(overrides.express_lanes ?? false)} />
             <KV label="Early-arrival promo" value={String(overrides.early_arrival_promo ?? false)} />
@@ -164,5 +169,4 @@ function ModelCard({ title, body }: { title: string; body: any }) {
     </div>
   );
 }
-
 

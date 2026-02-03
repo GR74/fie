@@ -21,8 +21,10 @@ class Game(BaseModel):
     home_team: str
     away_team: str
     sport: str = "football"
+    venue_id: str | None = Field(default=None, description="Key in venues.json; if absent, use default venue")
     venue_name: str
     venue_capacity: int = Field(ge=1)
+    is_indoor: bool = Field(default=False, description="Indoor venues have no wind/weather effect on HFA")
     kickoff_time_local: str = Field(description="HH:MM (24h) local time")
 
     # Context
@@ -43,8 +45,22 @@ class Game(BaseModel):
     # Baseline promotions
     baseline_promotion_type: PromotionType = "none"
 
+    # Alternate venue (for basketball: Covelli vs Schott)
+    alternate_venue_id: str | None = Field(default=None)
+    alternate_venue_name: str | None = Field(default=None)
+    alternate_venue_capacity: int | None = Field(default=None, ge=1)
+
+    # League/organization context (affects default objective: startup → fan_growth)
+    league_preset: Literal["college_football", "college_other", "minor_league", "startup_league"] | None = Field(
+        default=None,
+        description="Organization type for default objective weights",
+    )
+
 
 class ScenarioOverrides(BaseModel):
+    # Venue override (for games with alternate venues, e.g. Covelli vs Schott)
+    venue_id: str | None = Field(default=None, description="Override venue; used for venue selector (Covelli vs Schott)")
+
     # Competitive/crowd
     attendance: int | None = Field(default=None, ge=0)
     student_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -61,6 +77,7 @@ class ScenarioOverrides(BaseModel):
 
     # Concessions ops
     stands_open_pct: int | None = Field(default=None, ge=10, le=100)
+    seats_open_pct: int | None = Field(default=None, ge=25, le=100, description="% of venue capacity to open; affects HFA fill (McMahon & Quintanar)")
     staff_per_stand: int | None = Field(default=None, ge=1, le=20)
     express_lanes: bool | None = None
     early_arrival_promo: bool | None = None
@@ -148,6 +165,10 @@ class OptimizeRequest(BaseModel):
 
     # Objective
     target_delta_win_pp: float | None = Field(default=None, description="Optional target delta win prob (percentage points)")
+    objective_mode: Literal["profit", "fan_growth", "mission"] = Field(
+        default="profit",
+        description="profit=win prob + revenue; fan_growth=attendance+student ratio; mission=student ratio+crowd energy",
+    )
 
 
 class OptimizeCandidate(BaseModel):

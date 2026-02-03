@@ -9,7 +9,8 @@ import { ArrowRight, Crosshair } from "lucide-react";
 
 import { Chip, GlassCard, GlassSectionTitle, GlassButton } from "@/components/ui/glass";
 import { InteractiveHeatmap } from "@/components/viz/InteractiveHeatmap";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, getGame } from "@/lib/api";
+import { isProfessionalGame } from "@/lib/sports";
 
 type SensitivityResponse = {
   game_id: string;
@@ -37,7 +38,14 @@ export default function SensitivityPage() {
     },
   });
 
+  const gameQuery = useQuery({
+    queryKey: ["game", gameId],
+    queryFn: () => getGame(gameId),
+  });
+
   const data = q.data;
+  const game = gameQuery.data?.game;
+  const showStudentRatio = !isProfessionalGame(game);
 
   // Transform data for InteractiveHeatmap
   const heatmapData = useMemo(() => {
@@ -103,7 +111,9 @@ export default function SensitivityPage() {
             Sensitivity <span className="text-[hsl(var(--scarlet))]">Surface</span>
           </h1>
           <p className="muted mt-1 text-sm">
-            Click any cell to select an attendance × student ratio combination, then apply it to the simulator.
+            {showStudentRatio
+              ? "Click any cell to select an attendance × student ratio combination, then apply it to the simulator."
+              : "Click any cell to select an attendance × fan mix combination, then apply it to the simulator."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -120,7 +130,11 @@ export default function SensitivityPage() {
         <GlassCard className="lg:col-span-8 p-4">
           <GlassSectionTitle
             title="Win Probability Heatmap"
-            subtitle="Attendance × Student Ratio → Win Probability"
+            subtitle={
+              showStudentRatio
+                ? "Attendance × Student Ratio → Win Probability"
+                : "Attendance × Fan Mix → Win Probability"
+            }
             right={
               <div className="flex items-center gap-1 text-xs text-white/50">
                 <Crosshair className="w-3 h-3" />
@@ -138,7 +152,7 @@ export default function SensitivityPage() {
                   format: (v) => `${(v / 1000).toFixed(0)}K`,
                 }}
                 yAxis={{
-                  label: "Student %",
+                  label: showStudentRatio ? "Student %" : "Fan mix",
                   values: data.student_ratio,
                   format: (v) => `${(v * 100).toFixed(0)}%`,
                 }}
@@ -172,7 +186,9 @@ export default function SensitivityPage() {
                   <span className="text-lg font-bold">{selectedPoint.attendance.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 rounded-xl bg-white/5">
-                  <span className="text-sm text-white/60">Student Ratio</span>
+                    <span className="text-sm text-white/60">
+                      {showStudentRatio ? "Student Ratio" : "Fan Mix"}
+                    </span>
                   <span className="text-lg font-bold">{(selectedPoint.studentRatio * 100).toFixed(1)}%</span>
                 </div>
                 {selectedWinProb != null && (
@@ -213,8 +229,12 @@ export default function SensitivityPage() {
                   <span>{(Math.min(...data.attendance) / 1000).toFixed(0)}K – {(Math.max(...data.attendance) / 1000).toFixed(0)}K</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-white/40">Student ratio range</span>
-                  <span>{(Math.min(...data.student_ratio) * 100).toFixed(0)}% – {(Math.max(...data.student_ratio) * 100).toFixed(0)}%</span>
+                  <span className="text-white/40">
+                    {showStudentRatio ? "Student ratio range" : "Fan mix range"}
+                  </span>
+                  <span>
+                    {(Math.min(...data.student_ratio) * 100).toFixed(0)}% – {(Math.max(...data.student_ratio) * 100).toFixed(0)}%
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/40">Grid size</span>
@@ -235,5 +255,3 @@ export default function SensitivityPage() {
     </div>
   );
 }
-
-

@@ -18,7 +18,7 @@ interface Recommendation {
 interface RecommendationsPanelProps {
   currentOverrides: SimulateOverrides;
   baselineAttendance: number;
-  baselineStudentRatio: number;
+  baselineStudentRatio?: number;
   currentWinProb: number;
   baselineWinProb: number;
   opsUtilization: number;
@@ -26,6 +26,7 @@ interface RecommendationsPanelProps {
   decibels: number;
   onApply: (overrides: Partial<SimulateOverrides>) => void;
   className?: string;
+  showStudentRatio?: boolean;
 }
 
 function generateRecommendations(
@@ -40,11 +41,14 @@ function generateRecommendations(
     opsUtilization,
     crowdEnergy,
     decibels,
+    showStudentRatio = true,
   } = props;
 
   const recommendations: Recommendation[] = [];
   const attendance = currentOverrides.attendance ?? baselineAttendance;
-  const studentRatio = currentOverrides.student_ratio ?? baselineStudentRatio;
+  const studentRatio = showStudentRatio
+    ? currentOverrides.student_ratio ?? baselineStudentRatio ?? 0
+    : 0;
   const staffPerStand = currentOverrides.staff_per_stand ?? 6;
 
   // Win probability opportunities
@@ -61,7 +65,7 @@ function generateRecommendations(
       });
     }
 
-    if (studentRatio < 0.25) {
+    if (showStudentRatio && studentRatio < 0.25) {
       recommendations.push({
         id: "increase-students",
         type: "opportunity",
@@ -147,7 +151,7 @@ export function RecommendationsPanel(props: RecommendationsPanelProps) {
     () => generateRecommendations(props),
     [props.currentOverrides, props.baselineAttendance, props.baselineStudentRatio, 
      props.currentWinProb, props.baselineWinProb, props.opsUtilization, 
-     props.crowdEnergy, props.decibels]
+     props.crowdEnergy, props.decibels, props.showStudentRatio]
   );
 
   const getIcon = (type: string) => {
@@ -239,4 +243,3 @@ export function RecommendationsPanel(props: RecommendationsPanelProps) {
     </div>
   );
 }
-

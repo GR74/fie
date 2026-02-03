@@ -17,6 +17,14 @@
 
 ---
 
+## 1.1 Prior Work
+
+**McMahon & Quintanar (2024).** *Separately measuring home-field advantage for offenses and defenses: A panel-data study of constituent channels within collegiate American football.* Southern Economic Journal, 90(4), 1060–1098. DOI: [10.1002/soej.12682](https://doi.org/10.1002/soej.12682)
+
+Key findings informing this engine: crowd size hurts away-team scores (~1 pt per 38,875 fans); stadium capacity (empty seats) hurts home team (~1 pt per 21,211 empty seats); weather (wind, temp, precipitation) matters; travel and familiarity effects. The engine’s `seats_open_pct` lever and indoor-venue logic (zero wind/weather for basketball) align with these findings.
+
+---
+
 ## 2. Data Schema & Mock Dataset
 
 ### 2.1 Core Data Model

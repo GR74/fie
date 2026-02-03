@@ -1,0 +1,121 @@
+{
+  "ohio_stadium": {
+    "venue_id": "ohio_stadium",
+    "venue_name": "Ohio Stadium",
+    "capacity": 102780,
+    "sport": "football",
+    "is_indoor": false,
+    "concessions": {
+      "stands_total": 65,
+      "default_stands_open_pct": 85,
+      "default_staff_per_stand": 6,
+      "service_rate_customers_per_staff_per_min": 0.55,
+      "express_lane_service_boost_pct": 12
+    },
+    "crowd": {
+      "default_crowd_energy": 72
+    }
+  },
+  "schott": {
+    "venue_id": "schott",
+    "venue_name": "Value City Arena (Schott)",
+    "capacity": 19500,
+    "sport": "basketball",
+    "is_indoor": true,
+    "concessions": {
+      "stands_total": 24,
+      "default_stands_open_pct": 90,
+      "default_staff_per_stand": 5,
+      "service_rate_customers_per_staff_per_min": 0.6,
+      "express_lane_service_boost_pct": 10
+    },
+    "crowd": {
+      "default_crowd_energy": 75
+    }
+  },
+  "covelli": {
+    "venue_id": "covelli",
+    "venue_name": "Covelli Center",
+    "capacity": 5800,
+    "sport": "volleyball",
+    "is_indoor": true,
+    "concessions": {
+      "stands_total": 12,
+      "default_stands_open_pct": 95,
+      "default_staff_per_stand": 4,
+      "service_rate_customers_per_staff_per_min": 0.5,
+      "express_lane_service_boost_pct": 8
+    },
+    "crowd": {
+      "default_crowd_energy": 78
+    }
+  },
+  "bill_davis": {
+    "venue_id": "bill_davis",
+    "venue_name": "Bill Davis Stadium",
+    "capacity": 4500,
+    "sport": "baseball",
+    "is_indoor": false,
+    "concessions": {
+      "stands_total": 12,
+      "default_stands_open_pct": 70,
+      "default_staff_per_stand": 4,
+      "service_rate_customers_per_staff_per_min": 0.55,
+      "express_lane_service_boost_pct": 8
+    },
+    "crowd": {
+      "default_crowd_energy": 58
+    }
+  },
+  "huntington_park": {
+    "venue_id": "huntington_park",
+    "venue_name": "Huntington Park",
+    "capacity": 10000,
+    "sport": "baseball",
+    "is_indoor": false,
+    "concessions": {
+      "stands_total": 20,
+      "default_stands_open_pct": 75,
+      "default_staff_per_stand": 4,
+      "service_rate_customers_per_staff_per_min": 0.6,
+      "express_lane_service_boost_pct": 10
+    },
+    "crowd": {
+      "default_crowd_energy": 62
+    }
+  },
+  "nationwide_arena": {
+    "venue_id": "nationwide_arena",
+    "venue_name": "Nationwide Arena",
+    "capacity": 18500,
+    "sport": "football",
+    "is_indoor": true,
+    "concessions": {
+      "stands_total": 28,
+      "default_stands_open_pct": 80,
+      "default_staff_per_stand": 5,
+      "service_rate_customers_per_staff_per_min": 0.6,
+      "express_lane_service_boost_pct": 10
+    },
+    "crowd": {
+      "default_crowd_energy": 70
+    }
+  },
+  "historic_crew_stadium": {
+    "venue_id": "historic_crew_stadium",
+    "venue_name": "Historic Crew Stadium",
+    "capacity": 19668,
+    "sport": "soccer",
+    "is_indoor": false,
+    "concessions": {
+      "stands_total": 24,
+      "default_stands_open_pct": 78,
+      "default_staff_per_stand": 5,
+      "service_rate_customers_per_staff_per_min": 0.58,
+      "express_lane_service_boost_pct": 9
+    },
+    "crowd": {
+      "default_crowd_energy": 64
+    }
+  }
+}

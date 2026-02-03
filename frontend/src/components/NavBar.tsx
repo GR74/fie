@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/cn";
 
@@ -12,6 +12,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { href: "/", label: "Sports", match: /^\/$/ },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/games", label: "Team", match: /^\/games(?!\/.*\/live)/ },
   { href: "/compare", label: "Compare" },
@@ -20,9 +21,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/scenarios", label: "Scenarios" },
 ];
 
-function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
+function NavLink({ item, href, isActive }: { item: NavItem; href?: string; isActive: boolean }) {
   return (
-    <Link href={item.href} className="relative">
+    <Link href={href ?? item.href} className="relative">
       <motion.div
         className={cn(
           "relative px-3 py-2 rounded-full text-xs font-semibold transition-colors",
@@ -69,6 +70,13 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
 
 export function NavBar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const sport = searchParams?.get("sport");
+
+  const withSport = (href: string) => {
+    if (!sport || href.includes("?")) return href;
+    return `${href}?sport=${sport}`;
+  };
 
   const isActive = (item: NavItem) => {
     if (item.match) {
@@ -80,7 +88,12 @@ export function NavBar() {
   return (
     <nav className="hidden items-center gap-1 md:flex">
       {NAV_ITEMS.map((item) => (
-        <NavLink key={item.href} item={item} isActive={isActive(item)} />
+        <NavLink
+          key={item.href}
+          item={item}
+          href={withSport(item.href)}
+          isActive={isActive(item)}
+        />
       ))}
     </nav>
   );
@@ -89,7 +102,7 @@ export function NavBar() {
 // Logo with hover glow effect
 export function Logo() {
   return (
-    <Link href="/games/michigan_at_osu_2026" className="group">
+    <Link href="/" className="group">
       <motion.div 
         className="flex items-baseline gap-2"
         whileHover={{ scale: 1.01 }}
@@ -142,4 +155,3 @@ export function StatusChips() {
     </div>
   );
 }
-

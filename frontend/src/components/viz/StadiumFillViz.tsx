@@ -5,13 +5,25 @@ import { useMemo } from "react";
 interface StadiumFillVizProps {
   attendance: number;
   capacity: number;
-  studentRatio: number;
+  studentRatio?: number;
+  showStudentSplit?: boolean;
+  venueName?: string;
+  sport?: string;
   className?: string;
 }
 
-export function StadiumFillViz({ attendance, capacity, studentRatio, className = "" }: StadiumFillVizProps) {
+export function StadiumFillViz({
+  attendance,
+  capacity,
+  studentRatio,
+  showStudentSplit = true,
+  venueName = "Ohio Stadium",
+  sport = "football",
+  className = "",
+}: StadiumFillVizProps) {
   const fillPct = Math.min(100, (attendance / capacity) * 100);
-  const studentCount = Math.round(attendance * studentRatio);
+  const ratio = showStudentSplit ? studentRatio ?? 0 : 0;
+  const studentCount = Math.round(attendance * ratio);
   const generalCount = attendance - studentCount;
 
   // Generate horseshoe stadium sections
@@ -47,6 +59,17 @@ export function StadiumFillViz({ attendance, capacity, studentRatio, className =
     });
   }, [attendance, capacity]);
 
+  const sportEmoji =
+    sport === "basketball"
+      ? "🏀"
+      : sport === "volleyball"
+        ? "🏐"
+        : sport === "baseball"
+          ? "⚾"
+          : sport === "soccer"
+            ? "⚽"
+            : "🏟️";
+
   return (
     <div className={`rounded-2xl border border-white/10 overflow-hidden ${className}`} style={{
       background: "linear-gradient(135deg, hsl(220 15% 8%) 0%, hsl(220 18% 12%) 100%)"
@@ -55,11 +78,11 @@ export function StadiumFillViz({ attendance, capacity, studentRatio, className =
       <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold flex items-center gap-2">
-            <span className="text-lg">🏟️</span>
-            Ohio Stadium
+            <span className="text-lg">{sportEmoji}</span>
+            {venueName}
           </div>
           <div className="text-xs text-[hsl(var(--muted-fg))]">
-            "The Horseshoe" • {capacity.toLocaleString()} capacity
+            {capacity.toLocaleString()} capacity
           </div>
         </div>
         <div className="text-right">
@@ -77,34 +100,59 @@ export function StadiumFillViz({ attendance, capacity, studentRatio, className =
         <div className="relative w-full aspect-[4/3] max-w-[320px] mx-auto">
           {/* Stadium bowl SVG */}
           <svg viewBox="0 0 200 150" className="w-full h-full">
-            {/* Field */}
-            <ellipse cx="100" cy="85" rx="55" ry="35" fill="#1a4d1a" stroke="#2d6b2d" strokeWidth="2" />
-            
-            {/* Yard lines */}
-            {[...Array(5)].map((_, i) => (
-              <line 
-                key={i}
-                x1={60 + i * 20} 
-                y1="60" 
-                x2={60 + i * 20} 
-                y2="110" 
-                stroke="white" 
-                strokeWidth="0.5" 
-                opacity="0.4"
-              />
-            ))}
-            
-            {/* Center circle */}
-            <circle cx="100" cy="85" r="8" fill="none" stroke="white" strokeWidth="0.5" opacity="0.4" />
-            
-            {/* End zones */}
-            <path d="M 45 65 Q 45 85, 45 105 L 55 100 L 55 70 Z" fill="hsl(var(--scarlet))" opacity="0.7" />
-            <path d="M 155 65 Q 155 85, 155 105 L 145 100 L 145 70 Z" fill="#666" opacity="0.5" />
-            
-            {/* OSU logo placeholder in center */}
-            <text x="100" y="88" textAnchor="middle" fontSize="12" fontWeight="bold" fill="white" opacity="0.3">
-              OSU
-            </text>
+            {sport === "basketball" ? (
+              <>
+                {/* Basketball court */}
+                <rect x="40" y="45" width="120" height="80" fill="#c45c3e" stroke="#8B4513" strokeWidth="2" rx="2" />
+                <circle cx="100" cy="85" r="25" fill="none" stroke="white" strokeWidth="1.5" opacity="0.6" />
+                <circle cx="100" cy="85" r="4" fill="none" stroke="white" strokeWidth="1" opacity="0.6" />
+                <line x1="100" y1="45" x2="100" y2="125" stroke="white" strokeWidth="1" opacity="0.6" />
+                <rect x="40" y="65" width="20" height="40" fill="none" stroke="white" strokeWidth="1" opacity="0.5" />
+                <rect x="140" y="65" width="20" height="40" fill="none" stroke="white" strokeWidth="1" opacity="0.5" />
+                <text x="100" y="88" textAnchor="middle" fontSize="10" fontWeight="bold" fill="white" opacity="0.4">OSU</text>
+              </>
+            ) : sport === "volleyball" ? (
+              <>
+                {/* Volleyball court */}
+                <rect x="35" y="45" width="130" height="80" fill="#b87a4a" stroke="#8B4513" strokeWidth="2" rx="2" />
+                <line x1="100" y1="45" x2="100" y2="125" stroke="white" strokeWidth="1" opacity="0.7" />
+                <rect x="35" y="45" width="130" height="80" fill="none" stroke="white" strokeWidth="1" opacity="0.4" />
+                <line x1="35" y1="85" x2="165" y2="85" stroke="white" strokeWidth="1" opacity="0.4" />
+                <text x="100" y="88" textAnchor="middle" fontSize="10" fontWeight="bold" fill="white" opacity="0.4">OSU</text>
+              </>
+            ) : sport === "baseball" ? (
+              <>
+                {/* Baseball diamond */}
+                <polygon points="100,55 140,85 100,115 60,85" fill="#1a4d1a" stroke="#2d6b2d" strokeWidth="2" />
+                <circle cx="100" cy="85" r="4" fill="#d2b48c" />
+                <circle cx="100" cy="55" r="3" fill="#d2b48c" />
+                <circle cx="140" cy="85" r="3" fill="#d2b48c" />
+                <circle cx="60" cy="85" r="3" fill="#d2b48c" />
+                <text x="100" y="140" textAnchor="middle" fontSize="10" fontWeight="bold" fill="white" opacity="0.35">OSU</text>
+              </>
+            ) : sport === "soccer" ? (
+              <>
+                {/* Soccer pitch */}
+                <rect x="40" y="50" width="120" height="70" fill="#1a4d1a" stroke="#2d6b2d" strokeWidth="2" />
+                <line x1="100" y1="50" x2="100" y2="120" stroke="white" strokeWidth="1" opacity="0.6" />
+                <circle cx="100" cy="85" r="16" fill="none" stroke="white" strokeWidth="1" opacity="0.6" />
+                <rect x="40" y="72" width="18" height="26" fill="none" stroke="white" strokeWidth="1" opacity="0.5" />
+                <rect x="142" y="72" width="18" height="26" fill="none" stroke="white" strokeWidth="1" opacity="0.5" />
+                <text x="100" y="90" textAnchor="middle" fontSize="10" fontWeight="bold" fill="white" opacity="0.3">OSU</text>
+              </>
+            ) : (
+              <>
+                {/* Football field */}
+                <ellipse cx="100" cy="85" rx="55" ry="35" fill="#1a4d1a" stroke="#2d6b2d" strokeWidth="2" />
+                {[...Array(5)].map((_, i) => (
+                  <line key={i} x1={60 + i * 20} y1="60" x2={60 + i * 20} y2="110" stroke="white" strokeWidth="0.5" opacity="0.4" />
+                ))}
+                <circle cx="100" cy="85" r="8" fill="none" stroke="white" strokeWidth="0.5" opacity="0.4" />
+                <path d="M 45 65 Q 45 85, 45 105 L 55 100 L 55 70 Z" fill="hsl(var(--scarlet))" opacity="0.7" />
+                <path d="M 155 65 Q 155 85, 155 105 L 145 100 L 145 70 Z" fill="#666" opacity="0.5" />
+                <text x="100" y="88" textAnchor="middle" fontSize="12" fontWeight="bold" fill="white" opacity="0.3">OSU</text>
+              </>
+            )}
             
             {/* Stadium sections (horseshoe shape) */}
             {sections.map((section) => {
@@ -183,32 +231,53 @@ export function StadiumFillViz({ attendance, capacity, studentRatio, className =
       </div>
 
       {/* Stats footer */}
-      <div className="px-4 py-3 border-t border-white/10 grid grid-cols-3 gap-4 text-center">
-        <div>
-          <div className="text-lg font-bold text-[hsl(var(--scarlet))]">
-            {studentCount.toLocaleString()}
+      {showStudentSplit ? (
+        <div className="px-4 py-3 border-t border-white/10 grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-lg font-bold text-[hsl(var(--scarlet))]">
+              {studentCount.toLocaleString()}
+            </div>
+            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">
+              Students
+            </div>
           </div>
-          <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">
-            Students
+          <div>
+            <div className="text-lg font-bold text-gray-300">
+              {generalCount.toLocaleString()}
+            </div>
+            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">
+              General
+            </div>
+          </div>
+          <div>
+            <div className="text-lg font-bold text-white">
+              {(capacity - attendance).toLocaleString()}
+            </div>
+            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">
+              Available
+            </div>
           </div>
         </div>
-        <div>
-          <div className="text-lg font-bold text-gray-300">
-            {generalCount.toLocaleString()}
+      ) : (
+        <div className="px-4 py-3 border-t border-white/10 grid grid-cols-2 gap-4 text-center">
+          <div>
+            <div className="text-lg font-bold text-[hsl(var(--scarlet))]">
+              {attendance.toLocaleString()}
+            </div>
+            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">
+              Attendance
+            </div>
           </div>
-          <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">
-            General
+          <div>
+            <div className="text-lg font-bold text-white">
+              {fillPct.toFixed(1)}%
+            </div>
+            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">
+              Fill Rate
+            </div>
           </div>
         </div>
-        <div>
-          <div className="text-lg font-bold text-white">
-            {(capacity - attendance).toLocaleString()}
-          </div>
-          <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">
-            Available
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

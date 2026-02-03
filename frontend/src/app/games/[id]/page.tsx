@@ -27,6 +27,7 @@ import { PerformanceGauges } from "@/components/viz/PerformanceGauges";
 import { PresetSelector, PresetButtons } from "@/components/PresetSelector";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { RecommendationsPanel } from "@/components/RecommendationsPanel";
+import { getSportScopeForGame, isProfessionalGame } from "@/lib/sports";
 import { useKeyboardShortcuts, type ShortcutAction } from "@/hooks/useKeyboardShortcuts";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowRight, Copy, Download, FileText, Settings2, RotateCcw } from "lucide-react";
@@ -74,6 +75,7 @@ export default function GamePage() {
   const [optMaxEnergy, setOptMaxEnergy] = useState<number>(25);
   const [optMaxStaff, setOptMaxStaff] = useState<number>(12);
   const [optMinStands, setOptMinStands] = useState<number>(80);
+  const [optObjectiveMode, setOptObjectiveMode] = useState<"profit" | "fan_growth" | "mission">("profit");
 
   const [optimizing, setOptimizing] = useState(false);
   const [optError, setOptError] = useState<string | null>(null);
@@ -89,16 +91,23 @@ export default function GamePage() {
     enabled: !!gameId,
   });
 
+  const game = gameQuery.data?.game;
+  const sim = simulateQuery.data;
+  const sportScope = getSportScopeForGame(game);
+  const isProfessional = isProfessionalGame(game);
+  const showStudentRatio = !isProfessional;
+
   const optimizeMutation = useMutation({
     mutationFn: () =>
       optimizeGame(gameId, {
         current_overrides: stableOverrides,
         target_delta_win_pp: optTarget,
         max_attendance_increase: optMaxAtt,
-        max_student_ratio_increase: optMaxSr,
+        max_student_ratio_increase: showStudentRatio ? optMaxSr : 0,
         max_crowd_energy_increase: optMaxEnergy,
         max_staff_per_stand: optMaxStaff,
         min_stands_open_pct: optMinStands,
+        objective_mode: optObjectiveMode,
       }),
   });
 
@@ -111,8 +120,23 @@ export default function GamePage() {
       crowd_energy: prev.crowd_energy ?? 78,
       stands_open_pct: prev.stands_open_pct ?? 85,
       staff_per_stand: prev.staff_per_stand ?? 6,
+      seats_open_pct: prev.seats_open_pct ?? 100,
     }));
   }, [gameQuery.data?.game]);
+
+  // League preset: default objective for startup/minor league
+  useEffect(() => {
+    const preset = gameQuery.data?.game?.league_preset;
+    if (preset === "startup_league" || preset === "minor_league") {
+      setOptObjectiveMode("fan_growth");
+      return;
+    }
+    if (preset === "college_other") {
+      setOptObjectiveMode("mission");
+      return;
+    }
+    setOptObjectiveMode(sportScope.objectiveDefault);
+  }, [gameQuery.data?.game?.league_preset, sportScope.objectiveDefault]);
 
   // Keep overrides in the URL for sharing (debounced).
   const lastUrlRef = useRef<string>("");
@@ -127,9 +151,6 @@ export default function GamePage() {
     }, 250);
     return () => clearTimeout(timer);
   }, [overrides, router]);
-
-  const game = gameQuery.data?.game;
-  const sim = simulateQuery.data;
 
   const baselineWin = sim?.baseline.hfa.predicted_win_probability ?? 0;
   const cfWin = sim?.counterfactual.hfa.predicted_win_probability ?? 0;
@@ -167,9 +188,24 @@ export default function GamePage() {
   }, [contribChart]);
 
   const isLoading = gameQuery.isLoading || simulateQuery.isLoading;
+  const effectiveVenueCapacity =
+    game && overrides.venue_id === game.alternate_venue_id
+      ? (game.alternate_venue_capacity ?? game.venue_capacity)
+      : game?.venue_capacity ?? 0;
+  const effectiveVenueName =
+    game && overrides.venue_id === game.alternate_venue_id
+      ? (game.alternate_venue_name ?? game.venue_name)
+      : game?.venue_name ?? "";
+  const seatsOpen = overrides.seats_open_pct ?? 100;
+  const effectiveCap = game ? Math.max(1, effectiveVenueCapacity * seatsOpen / 100) : 1;
   const fillPct = game
-    ? ((overrides.attendance ?? game.baseline_attendance) / game.venue_capacity) * 100
+    ? ((overrides.attendance ?? game.baseline_attendance) / effectiveCap) * 100
     : 0;
+  const attendanceMax = Math.min(
+    sportScope.ranges.attendance.max,
+    effectiveVenueCapacity ?? sportScope.ranges.attendance.max,
+  );
+  const attendanceMin = Math.min(sportScope.ranges.attendance.min, attendanceMax);
 
   // Feed cinematic telemetry so the 3D layer reacts to real outputs.
   useEffect(() => {
@@ -188,6 +224,7 @@ export default function GamePage() {
       crowd_energy: 78,
       stands_open_pct: 85,
       staff_per_stand: 6,
+      seats_open_pct: 100,
     });
   };
 
@@ -255,7 +292,7 @@ export default function GamePage() {
                   {game.date} • {game.kickoff_time_local}
                 </Chip>
                 <Chip>
-                  {game.venue_name} • cap {game.venue_capacity.toLocaleString()}
+                  {effectiveVenueName || game.venue_name} • cap {(effectiveVenueCapacity || game.venue_capacity).toLocaleString()}
                 </Chip>
               </div>
             ) : null}
@@ -269,6 +306,7 @@ export default function GamePage() {
         <div className="flex flex-wrap items-center gap-2">
           <PresetSelector 
             onApply={(preset) => setOverrides((s) => ({ ...s, ...preset }))}
+            hideStudentRatio={!showStudentRatio}
           />
           <GlassButton
             type="button"
@@ -305,8 +343,6 @@ export default function GamePage() {
                 ["game_id", game.game_id],
                 ["attendance_baseline", game.baseline_attendance],
                 ["attendance_counterfactual", overrides.attendance ?? game.baseline_attendance],
-                ["student_ratio_baseline", game.baseline_student_ratio],
-                ["student_ratio_counterfactual", overrides.student_ratio ?? game.baseline_student_ratio],
                 ["crowd_energy", overrides.crowd_energy ?? 78],
                 ["win_prob_baseline", sim.baseline.hfa.predicted_win_probability],
                 ["win_prob_counterfactual", sim.counterfactual.hfa.predicted_win_probability],
@@ -316,6 +352,12 @@ export default function GamePage() {
                 ["revenue_baseline_usd", sim.baseline.concessions.revenue_total_usd],
                 ["revenue_counterfactual_usd", sim.counterfactual.concessions.revenue_total_usd],
               ];
+              if (showStudentRatio) {
+                rows.splice(3, 0,
+                  ["student_ratio_baseline", game.baseline_student_ratio],
+                  ["student_ratio_counterfactual", overrides.student_ratio ?? game.baseline_student_ratio],
+                );
+              }
               const csv = ["metric,value", ...rows.map(([k, v]) => `${k},${v}`)].join("\n");
               const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
               const a = document.createElement("a");
@@ -403,11 +445,12 @@ export default function GamePage() {
                       const res = await optimizeGame(gameId, {
                         current_overrides: overrides,
                         max_attendance_increase: 5000,
-                        max_student_ratio_increase: 0.03,
+                        max_student_ratio_increase: showStudentRatio ? 0.03 : 0,
                         max_crowd_energy_increase: 25,
                         max_staff_per_stand: 10,
                         min_stands_open_pct: 80,
                         target_delta_win_pp: 1.0,
+                        objective_mode: optObjectiveMode,
                       });
                       setOverrides((s) => ({ ...s, ...(res.recommended.overrides as any) }));
                     } catch (e: any) {
@@ -426,6 +469,9 @@ export default function GamePage() {
               </div>
             }
           />
+          <div className="muted mt-2 text-[11px]">
+            Note: win-probability shifts have diminishing returns near extremes because the model uses a sigmoid.
+          </div>
 
           <div className="mt-4 grid grid-cols-4 gap-2 text-xs">
               {(
@@ -462,45 +508,117 @@ export default function GamePage() {
             {/* Quick preset buttons */}
             <PresetButtons 
               onApply={(preset) => setOverrides((s) => ({ ...s, ...preset }))}
+              hideStudentRatio={!showStudentRatio}
               className="pb-2 border-b border-white/10"
             />
             
             {tab === "competitive" && (
               <>
+                {game?.alternate_venue_id && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold">Venue</div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOverrides((s) => {
+                            const next = { ...s };
+                            delete next.venue_id;
+                            return next;
+                          })
+                        }
+                        className={cn(
+                          "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition",
+                          !overrides.venue_id || overrides.venue_id === game.venue_id
+                            ? "border-[hsl(var(--scarlet))] bg-[hsl(var(--scarlet))]/20 text-[hsl(var(--scarlet))]"
+                            : "border-white/10 bg-transparent hover:bg-white/5",
+                        )}
+                      >
+                        {game.venue_name}
+                        <span className="muted ml-1 text-xs">({game.venue_capacity.toLocaleString()} cap)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOverrides((s) => ({
+                            ...s,
+                            venue_id: game.alternate_venue_id!,
+                          }))
+                        }
+                        className={cn(
+                          "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition",
+                          overrides.venue_id === game.alternate_venue_id
+                            ? "border-[hsl(var(--scarlet))] bg-[hsl(var(--scarlet))]/20 text-[hsl(var(--scarlet))]"
+                            : "border-white/10 bg-transparent hover:bg-white/5",
+                        )}
+                      >
+                        {game.alternate_venue_name ?? "Covelli"}
+                        <span className="muted ml-1 text-xs">
+                          ({(game.alternate_venue_capacity ?? 5800).toLocaleString()} cap)
+                        </span>
+                      </button>
+                    </div>
+                    <div className="muted text-xs">
+                      Where to host? {game.venue_name} = more capacity;{" "}
+                      {game.alternate_venue_name ?? "alternate venue"} = intimate sellout feel.
+                    </div>
+                  </div>
+                )}
                 <Control
                   label="Attendance"
                   value={overrides.attendance}
                   placeholder={game?.baseline_attendance}
-                  min={80000}
-                  max={game?.venue_capacity ?? 110000}
-                  step={250}
+                  min={attendanceMin}
+                  max={attendanceMax}
+                  step={sportScope.ranges.attendance.step}
                   format={(v) => (v ?? 0).toLocaleString()}
                   onChange={(v) => setOverrides((s) => ({ ...s, attendance: v }))}
                 />
+                {showStudentRatio && (
+                  <Control
+                    label="Student ratio"
+                    value={
+                      overrides.student_ratio != null ? Math.round(overrides.student_ratio * 1000) : undefined
+                    }
+                    placeholder={
+                      game?.baseline_student_ratio != null ? Math.round(game.baseline_student_ratio * 1000) : undefined
+                    }
+                    min={sportScope.ranges.studentRatioPermille.min}
+                    max={sportScope.ranges.studentRatioPermille.max}
+                    step={sportScope.ranges.studentRatioPermille.step}
+                    format={(v) => `${((v ?? 0) / 10).toFixed(1)}%`}
+                    onChange={(v) => setOverrides((s) => ({ ...s, student_ratio: (v ?? 180) / 1000 }))}
+                  />
+                )}
+                {!game?.is_indoor && (
+                  <Control
+                    label="Wind (mph)"
+                    value={overrides.weather_wind_mph}
+                    placeholder={game?.baseline_weather_wind_mph}
+                    min={sportScope.ranges.windMph.min}
+                    max={sportScope.ranges.windMph.max}
+                    step={sportScope.ranges.windMph.step}
+                    format={(v) => `${v ?? 0} mph`}
+                    onChange={(v) => setOverrides((s) => ({ ...s, weather_wind_mph: v }))}
+                  />
+                )}
                 <Control
-                  label="Student ratio"
-                  value={
-                    overrides.student_ratio != null ? Math.round(overrides.student_ratio * 1000) : undefined
-                  }
-                  placeholder={
-                    game?.baseline_student_ratio != null ? Math.round(game.baseline_student_ratio * 1000) : undefined
-                  }
-                  min={100}
-                  max={260}
-                  step={1}
-                  format={(v) => `${((v ?? 0) / 10).toFixed(1)}%`}
-                  onChange={(v) => setOverrides((s) => ({ ...s, student_ratio: (v ?? 180) / 1000 }))}
+                  label="Seats open %"
+                  value={overrides.seats_open_pct}
+                  placeholder={100}
+                  min={sportScope.ranges.seatsOpenPct.min}
+                  max={sportScope.ranges.seatsOpenPct.max}
+                  step={sportScope.ranges.seatsOpenPct.step}
+                  format={(v) => `${v ?? 100}%`}
+                  onChange={(v) => setOverrides((s) => ({ ...s, seats_open_pct: v }))}
                 />
-                <Control
-                  label="Wind (mph)"
-                  value={overrides.weather_wind_mph}
-                  placeholder={game?.baseline_weather_wind_mph}
-                  min={0}
-                  max={25}
-                  step={1}
-                  format={(v) => `${v ?? 0} mph`}
-                  onChange={(v) => setOverrides((s) => ({ ...s, weather_wind_mph: v }))}
-                />
+                <div className="glass-strong rounded-2xl border border-white/10 p-3 text-xs">
+                  <div className="font-semibold">Seats open (McMahon & Quintanar)</div>
+                  <div className="muted mt-1">
+                    Opening fewer seats raises effective fill → better HFA. This captures the &quot;open all seats at the
+                    Schott/Covelli?&quot; decision and similar venue sizing tradeoffs.
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <div className="text-xs font-semibold">Promotion</div>
                   <select
@@ -526,15 +644,15 @@ export default function GamePage() {
                 <Control
                   label="Crowd energy"
                   value={overrides.crowd_energy}
-                  placeholder={78}
-                  min={0}
-                  max={100}
-                  step={1}
+                  placeholder={sportScope.defaults.crowdEnergy}
+                  min={sportScope.ranges.crowdEnergy.min}
+                  max={sportScope.ranges.crowdEnergy.max}
+                  step={sportScope.ranges.crowdEnergy.step}
                   format={(v) => `${v ?? 0}/100`}
                   onChange={(v) => setOverrides((s) => ({ ...s, crowd_energy: v }))}
                 />
                 <div className="glass-strong rounded-2xl border border-white/10 p-4 text-xs">
-                  <div className="font-semibold">Buckeye crowd energy</div>
+                  <div className="font-semibold">{sportScope.label} crowd energy</div>
                   <div className="muted mt-1">
                     This lever increases projected decibels and adds a small, saturating boost to win probability.
                   </div>
@@ -548,9 +666,9 @@ export default function GamePage() {
                   label="Stands open"
                   value={overrides.stands_open_pct}
                   placeholder={85}
-                  min={50}
-                  max={100}
-                  step={1}
+                  min={sportScope.ranges.standsOpenPct.min}
+                  max={sportScope.ranges.standsOpenPct.max}
+                  step={sportScope.ranges.standsOpenPct.step}
                   format={(v) => `${v ?? 0}%`}
                   onChange={(v) => setOverrides((s) => ({ ...s, stands_open_pct: v }))}
                 />
@@ -558,9 +676,9 @@ export default function GamePage() {
                   label="Staff per stand"
                   value={overrides.staff_per_stand}
                   placeholder={6}
-                  min={2}
-                  max={12}
-                  step={1}
+                  min={sportScope.ranges.staffPerStand.min}
+                  max={sportScope.ranges.staffPerStand.max}
+                  step={sportScope.ranges.staffPerStand.step}
                   format={(v) => `${v ?? 0}`}
                   onChange={(v) => setOverrides((s) => ({ ...s, staff_per_stand: v }))}
                 />
@@ -579,10 +697,54 @@ export default function GamePage() {
 
             {tab === "optimize" && (
               <>
-                <div className="glass-strong rounded-2xl border border-white/10 p-4 text-xs">
-                  <div className="font-semibold">Optimizer mode</div>
-                  <div className="muted mt-1">
-                    Finds a lever bundle that maximizes Δ win prob while penalizing concessions overload.
+                {game?.league_preset && (
+                  <div className="glass-strong rounded-2xl border border-white/10 px-3 py-2 text-xs">
+                    <div className="font-semibold">League context</div>
+                    <div className="muted mt-0.5">
+                      {game.league_preset === "college_football" && "Revenue sport • profit focus"}
+                      {game.league_preset === "college_other" && "Non-revenue • mission + fan growth"}
+                      {game.league_preset === "minor_league" && "Fan-base building • balance growth vs profit"}
+                      {game.league_preset === "startup_league" && "New league • prioritize fan growth"}
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold">Objective mode</div>
+                  <div className="flex gap-2">
+                    {(["profit", "fan_growth", "mission"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setOptObjectiveMode(mode)}
+                        className={cn(
+                          "flex-1 rounded-xl px-3 py-2 text-center text-xs font-semibold transition",
+                          optObjectiveMode === mode ? "btn-primary" : "btn-ghost",
+                        )}
+                        title={
+                          mode === "profit"
+                            ? "Maximize win prob + revenue"
+                            : mode === "fan_growth"
+                              ? showStudentRatio
+                                ? "Prioritize attendance + student ratio"
+                                : "Prioritize attendance + fan growth"
+                              : showStudentRatio
+                                ? "Prioritize student ratio + crowd energy (mission)"
+                                : "Prioritize fan experience + crowd energy"
+                        }
+                      >
+                        {mode === "profit" ? "Profit" : mode === "fan_growth" ? "Fan growth" : "Mission"}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="muted text-[11px]">
+                    {optObjectiveMode === "profit" && "Win prob + revenue (NFL/MLB execs)"}
+                    {optObjectiveMode === "fan_growth" &&
+                      (showStudentRatio
+                        ? "Attendance + student mix (minor leagues)"
+                        : "Attendance + fan growth (minor leagues)")}
+                    {optObjectiveMode === "mission" &&
+                      (showStudentRatio
+                        ? "Student engagement + energy (university)"
+                        : "Fan experience + energy (mission)")}
                   </div>
                 </div>
 
@@ -608,16 +770,18 @@ export default function GamePage() {
                   onChange={(v) => setOptMaxAtt(v ?? 0)}
                 />
 
-                <Control
-                  label="Max student ratio increase"
-                  value={Math.round(optMaxSr * 1000)}
-                  placeholder={30}
-                  min={0}
-                  max={120}
-                  step={1}
-                  format={(v) => `+${((v ?? 0) / 10).toFixed(1)}%`}
-                  onChange={(v) => setOptMaxSr((v ?? 0) / 1000)}
-                />
+                {showStudentRatio && (
+                  <Control
+                    label="Max student ratio increase"
+                    value={Math.round(optMaxSr * 1000)}
+                    placeholder={30}
+                    min={0}
+                    max={120}
+                    step={1}
+                    format={(v) => `+${((v ?? 0) / 10).toFixed(1)}%`}
+                    onChange={(v) => setOptMaxSr((v ?? 0) / 1000)}
+                  />
+                )}
 
                 <Control
                   label="Max crowd energy increase"
@@ -853,8 +1017,11 @@ export default function GamePage() {
               {game && (
                 <StadiumFillViz
                   attendance={overrides.attendance ?? game.baseline_attendance}
-                  capacity={game.venue_capacity}
-                  studentRatio={overrides.student_ratio ?? game.baseline_student_ratio}
+                  capacity={effectiveVenueCapacity}
+                  studentRatio={showStudentRatio ? (overrides.student_ratio ?? game.baseline_student_ratio) : 0}
+                  showStudentSplit={showStudentRatio}
+                  venueName={effectiveVenueName || game.venue_name}
+                  sport={game.sport}
                 />
               )}
               
@@ -877,12 +1044,13 @@ export default function GamePage() {
               <RecommendationsPanel
                 currentOverrides={overrides}
                 baselineAttendance={game.baseline_attendance}
-                baselineStudentRatio={game.baseline_student_ratio}
+                baselineStudentRatio={showStudentRatio ? game.baseline_student_ratio : undefined}
                 currentWinProb={cfWin}
                 baselineWinProb={baselineWin}
                 opsUtilization={sim.counterfactual.concessions.ops.worst_utilization}
                 crowdEnergy={overrides.crowd_energy ?? 78}
                 decibels={sim.counterfactual.noise.projected_decibels}
+                showStudentRatio={showStudentRatio}
                 onApply={(newOverrides) => setOverrides((s) => ({ ...s, ...newOverrides }))}
               />
             )}
@@ -1058,5 +1226,3 @@ function OptimizeResultCard({
     </div>
   );
 }
-
-

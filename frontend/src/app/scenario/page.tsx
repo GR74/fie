@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 import { getRecommendations, predictHfa, type GlobalScenario, type PromotionType } from "@/lib/api";
 import { Chip, GlassCard, GlassSectionTitle } from "@/components/ui/glass";
+import { SportHeader } from "@/components/SportSwitcher";
+import { buildScenarioDefaults, getSportScope, isProfessionalSportId } from "@/lib/sports";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 function pct(x: number) {
@@ -11,17 +14,15 @@ function pct(x: number) {
 }
 
 export default function ScenarioLabPage() {
-  const [scenario, setScenario] = useState<GlobalScenario>({
-    attendance: 102000,
-    student_ratio: 0.19,
-    rival_game: true,
-    opponent_rank: 4,
-    home_rank: 2,
-    weather_wind: 12,
-    kickoff_time_local: "12:00",
-    promotion: "rivalry_hype",
-    crowd_energy: 80,
-  });
+  const searchParams = useSearchParams();
+  const sport = getSportScope(searchParams?.get("sport"));
+  const showStudentRatio = !isProfessionalSportId(sport.id);
+
+  const [scenario, setScenario] = useState<GlobalScenario>(() => buildScenarioDefaults(sport));
+
+  useEffect(() => {
+    setScenario(buildScenarioDefaults(sport));
+  }, [sport]);
 
   const scenarioKey = useMemo(() => scenario, [scenario]);
 
@@ -45,12 +46,10 @@ export default function ScenarioLabPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Scenario Lab</h1>
-        <p className="muted mt-1 text-sm">
-          A general what-if playground using the same mock HFA engine (not game-specific).
-        </p>
-      </div>
+      <SportHeader
+        title="Scenario Lab"
+        subtitle="A general what-if playground using the same mock HFA engine (not game-specific)."
+      />
 
       <div className="grid gap-5 lg:grid-cols-12">
         <GlassCard className="lg:col-span-5 p-4 space-y-4">
@@ -59,22 +58,24 @@ export default function ScenarioLabPage() {
           <Control
             label="Attendance"
             value={scenario.attendance}
-            min={80000}
-            max={110000}
-            step={250}
+            min={sport.ranges.attendance.min}
+            max={sport.ranges.attendance.max}
+            step={sport.ranges.attendance.step}
             format={(v) => v.toLocaleString()}
             onChange={(v) => setScenario((s) => ({ ...s, attendance: v }))}
           />
 
-          <Control
-            label="Student ratio"
-            value={Math.round(scenario.student_ratio * 1000)}
-            min={100}
-            max={260}
-            step={1}
-            format={(v) => `${(v / 10).toFixed(1)}%`}
-            onChange={(v) => setScenario((s) => ({ ...s, student_ratio: v / 1000 }))}
-          />
+          {showStudentRatio && (
+            <Control
+              label="Student ratio"
+              value={Math.round(scenario.student_ratio * 1000)}
+              min={sport.ranges.studentRatioPermille.min}
+              max={sport.ranges.studentRatioPermille.max}
+              step={sport.ranges.studentRatioPermille.step}
+              format={(v) => `${(v / 10).toFixed(1)}%`}
+              onChange={(v) => setScenario((s) => ({ ...s, student_ratio: v / 1000 }))}
+            />
+          )}
 
           <Control
             label="Opponent rank (1 best)"
@@ -99,9 +100,9 @@ export default function ScenarioLabPage() {
           <Control
             label="Wind (mph)"
             value={scenario.weather_wind}
-            min={0}
-            max={25}
-            step={1}
+            min={sport.ranges.windMph.min}
+            max={sport.ranges.windMph.max}
+            step={sport.ranges.windMph.step}
             format={(v) => `${v} mph`}
             onChange={(v) => setScenario((s) => ({ ...s, weather_wind: v }))}
           />
@@ -109,9 +110,9 @@ export default function ScenarioLabPage() {
           <Control
             label="Crowd energy"
             value={scenario.crowd_energy}
-            min={0}
-            max={100}
-            step={1}
+            min={sport.ranges.crowdEnergy.min}
+            max={sport.ranges.crowdEnergy.max}
+            step={sport.ranges.crowdEnergy.step}
             format={(v) => `${v}/100`}
             onChange={(v) => setScenario((s) => ({ ...s, crowd_energy: v }))}
           />
@@ -229,5 +230,3 @@ function Control({
     </div>
   );
 }
-
-

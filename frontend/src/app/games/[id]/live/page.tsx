@@ -21,6 +21,7 @@ import { HudDivider } from "@/components/ui/hud";
 import { GameClock } from "@/components/GameClock";
 import { LiveMetricCard, LiveMetricCompact } from "@/components/LiveMetricCard";
 import { getGame, simulateGame } from "@/lib/api";
+import { isProfessionalGame } from "@/lib/sports";
 
 const PERIOD_CONFIGS = {
   1: { name: "Pre-Game", attendanceFactor: 0.3, concessionActivity: "low" },
@@ -58,19 +59,30 @@ export default function LiveGameDayPage() {
 
   const game = gameQuery.data?.game;
   const sim = simulateQuery.data;
+  const showStudentRatio = !isProfessionalGame(game);
 
   // Simulate live events
   useEffect(() => {
-    const events = [
-      "🏈 Kickoff! Game underway",
-      "📣 Student section at full capacity",
-      "🌭 Concession lines forming at Section 12",
-      "🔊 Crowd noise reaching 108 dB",
-      "⚡ Express lanes handling overflow",
-      "🎉 Touchdown! Crowd energy surging",
-      "⚠️ Halftime rush beginning",
-      "✅ All stands fully staffed",
-    ];
+    const events = showStudentRatio
+      ? [
+          "🏈 Kickoff! Game underway",
+          "📣 Student section at full capacity",
+          "🌭 Concession lines forming at Section 12",
+          "🔊 Crowd noise reaching 108 dB",
+          "⚡ Express lanes handling overflow",
+          "🎉 Touchdown! Crowd energy surging",
+          "⚠️ Halftime rush beginning",
+          "✅ All stands fully staffed",
+        ]
+      : [
+          "🏟️ Gates open, crowd building",
+          "🌭 Concession lines forming at Section 12",
+          "🔊 Crowd noise climbing past 102 dB",
+          "⚡ Express lanes handling overflow",
+          "🎉 Momentum swing — energy spike",
+          "⚠️ Intermission rush beginning",
+          "✅ All stands fully staffed",
+        ];
     
     const interval = setInterval(() => {
       const randomEvent = events[Math.floor(Math.random() * events.length)];
@@ -319,19 +331,30 @@ export default function LiveGameDayPage() {
           }
         />
         
-        <div className="mt-4 grid grid-cols-4 gap-4">
-          <div className="text-center p-3 rounded-xl bg-white/5">
-            <div className="text-xs text-white/50 mb-1">Students</div>
-            <div className="text-lg font-bold">
-              ${((sim?.counterfactual.concessions.revenue_students_usd ?? 0) * periodConfig.attendanceFactor / 1000).toFixed(0)}K
+        <div className={`mt-4 grid gap-4 ${showStudentRatio ? "grid-cols-4" : "grid-cols-3"}`}>
+          {showStudentRatio ? (
+            <>
+              <div className="text-center p-3 rounded-xl bg-white/5">
+                <div className="text-xs text-white/50 mb-1">Students</div>
+                <div className="text-lg font-bold">
+                  ${((sim?.counterfactual.concessions.revenue_students_usd ?? 0) * periodConfig.attendanceFactor / 1000).toFixed(0)}K
+                </div>
+              </div>
+              <div className="text-center p-3 rounded-xl bg-white/5">
+                <div className="text-xs text-white/50 mb-1">General</div>
+                <div className="text-lg font-bold">
+                  ${((sim?.counterfactual.concessions.revenue_nonstudents_usd ?? 0) * periodConfig.attendanceFactor / 1000).toFixed(0)}K
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-center p-3 rounded-xl bg-white/5">
+              <div className="text-xs text-white/50 mb-1">Total</div>
+              <div className="text-lg font-bold">
+                ${((sim?.counterfactual.concessions.revenue_total_usd ?? 0) * periodConfig.attendanceFactor / 1000).toFixed(0)}K
+              </div>
             </div>
-          </div>
-          <div className="text-center p-3 rounded-xl bg-white/5">
-            <div className="text-xs text-white/50 mb-1">General</div>
-            <div className="text-lg font-bold">
-              ${((sim?.counterfactual.concessions.revenue_nonstudents_usd ?? 0) * periodConfig.attendanceFactor / 1000).toFixed(0)}K
-            </div>
-          </div>
+          )}
           <div className="text-center p-3 rounded-xl bg-white/5">
             <div className="text-xs text-white/50 mb-1">Per Cap</div>
             <div className="text-lg font-bold">
@@ -349,4 +372,3 @@ export default function LiveGameDayPage() {
     </div>
   );
 }
-

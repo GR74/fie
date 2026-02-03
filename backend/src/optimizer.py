@@ -4,23 +4,48 @@ from typing import Any
 
 from .mock_model import HfaInputs, predict_hfa, predict_loudness_db, simulate_concessions
 from .schemas import Game, OptimizeCandidate, OptimizeRequest
-from .storage import load_venue
+from .storage import get_venue
 
 
-def _score_candidate(*, delta_win: float, util: float, revenue_total: float, target_pp: float | None) -> float:
+def _score_candidate(
+    *,
+    delta_win: float,
+    util: float,
+    revenue_total: float,
+    target_pp: float | None,
+    objective_mode: str,
+    attendance: int,
+    student_ratio: float,
+    crowd_energy: int,
+) -> float:
     """
-    Higher is better. Reward delta win prob. Penalize ops overload. Mildly reward revenue.
-    If target_pp is provided, reward being at/above target.
+    Higher is better. Objective mode: profit (default), fan_growth, or mission.
     """
     delta_pp = delta_win * 100.0
-    overload = max(0.0, util - 0.90)  # start penalizing above 90% util
-    score = 1.0 * delta_pp
-    score -= 6.0 * overload  # strong ops penalty
-    score += 0.000001 * revenue_total  # tiny tie-breaker
+    overload = max(0.0, util - 0.90)
+
+    if objective_mode == "fan_growth":
+        # Prioritize attendance + student ratio; secondary revenue
+        score = 0.00001 * attendance + 50.0 * student_ratio
+        score += 0.5 * delta_pp
+        score -= 4.0 * overload
+        score += 0.0000005 * revenue_total
+    elif objective_mode == "mission":
+        # Prioritize student ratio + crowd energy; secondary revenue
+        score = 80.0 * student_ratio + 0.3 * crowd_energy
+        score += 0.4 * delta_pp
+        score -= 4.0 * overload
+        score += 0.0000003 * revenue_total
+    else:
+        # profit (default): win prob + revenue, penalize ops
+        score = 1.0 * delta_pp
+        score -= 6.0 * overload
+        score += 0.000001 * revenue_total
+
     if target_pp is not None:
-        score += 2.0 * min(delta_pp, target_pp)  # reward progress
+        score += 2.0 * min(delta_pp, target_pp)
         if delta_pp >= target_pp:
-            score += 3.0  # bonus for hitting target
+            score += 3.0
     return float(score)
 
 
@@ -29,7 +54,8 @@ def optimize_game(game: Game, req: OptimizeRequest) -> tuple[OptimizeCandidate, 
     Simple grid/heuristic optimizer (fast, deterministic).
     Returns best candidate + next best alternatives.
     """
-    venue = load_venue()
+    venue = get_venue(game.venue_id)
+    is_indoor = bool(venue.get("is_indoor", False))
     defaults = venue.get("concessions", {})
     crowd_defaults = venue.get("crowd", {})
 
@@ -46,15 +72,18 @@ def optimize_game(game: Game, req: OptimizeRequest) -> tuple[OptimizeCandidate, 
         "crowd_energy": int(crowd_defaults.get("default_crowd_energy", 78)),
         "stands_open_pct": int(defaults.get("default_stands_open_pct", 85)),
         "staff_per_stand": int(defaults.get("default_staff_per_stand", 6)),
+        "seats_open_pct": 100,
         "express_lanes": False,
         "early_arrival_promo": False,
     }
     current = {**base, **req.current_overrides.model_dump(exclude_none=True)}
 
+    seats_open = int(current.get("seats_open_pct", 100))
+    effective_cap = max(1, int(game.venue_capacity * seats_open / 100))
     base_hfa = predict_hfa(
         HfaInputs(
             attendance=int(base["attendance"]),
-            venue_capacity=game.venue_capacity,
+            venue_capacity=effective_cap,
             student_ratio=float(base["student_ratio"]),
             rivalry_flag=bool(game.rivalry_flag),
             opponent_rank=int(base["opponent_rank"]),
@@ -63,6 +92,7 @@ def optimize_game(game: Game, req: OptimizeRequest) -> tuple[OptimizeCandidate, 
             kickoff_time_local=str(base["kickoff_time_local"]),
             promotion_type=base["promotion_type"],
             crowd_energy=int(base["crowd_energy"]),
+            is_indoor=is_indoor,
         )
     )
     base_p = float(base_hfa["predicted_win_probability"])
@@ -99,10 +129,11 @@ def optimize_game(game: Game, req: OptimizeRequest) -> tuple[OptimizeCandidate, 
                 for stands_open_pct in stands_vals:
                     for staff_per_stand in staff_vals:
                         for express in express_vals:
+                            eff_cap = max(1, int(game.venue_capacity * seats_open / 100))
                             hfa = predict_hfa(
                                 HfaInputs(
                                     attendance=int(att),
-                                    venue_capacity=game.venue_capacity,
+                                    venue_capacity=eff_cap,
                                     student_ratio=float(sr),
                                     rivalry_flag=bool(game.rivalry_flag),
                                     opponent_rank=int(current["opponent_rank"]),
@@ -111,6 +142,7 @@ def optimize_game(game: Game, req: OptimizeRequest) -> tuple[OptimizeCandidate, 
                                     kickoff_time_local=str(current["kickoff_time_local"]),
                                     promotion_type=current["promotion_type"],
                                     crowd_energy=int(en),
+                                    is_indoor=is_indoor,
                                 )
                             )
                             p = float(hfa["predicted_win_probability"])
@@ -125,6 +157,8 @@ def optimize_game(game: Game, req: OptimizeRequest) -> tuple[OptimizeCandidate, 
                                 staff_per_stand=int(staff_per_stand),
                                 express_lanes=bool(express),
                                 early_arrival_promo=bool(current["early_arrival_promo"]),
+                                venue=venue,
+                                is_indoor=is_indoor,
                             )
 
                             util = float(concessions["ops"]["worst_utilization"])
@@ -134,6 +168,10 @@ def optimize_game(game: Game, req: OptimizeRequest) -> tuple[OptimizeCandidate, 
                                 util=util,
                                 revenue_total=float(concessions["revenue_total_usd"]),
                                 target_pp=req.target_delta_win_pp,
+                                objective_mode=req.objective_mode,
+                                attendance=int(att),
+                                student_ratio=float(sr),
+                                crowd_energy=int(en),
                             )
 
                             candidates.append(

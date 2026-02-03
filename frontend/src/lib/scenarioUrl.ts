@@ -28,12 +28,15 @@ export function parseOverridesFromSearchParams(
     if (value !== undefined) o[key] = value;
   };
 
+  const venueId = params.get("venue_id");
+  if (venueId) o.venue_id = venueId;
   maybeSet("attendance", num("attendance"));
   maybeSet("student_ratio", num("student_ratio"));
   maybeSet("weather_wind_mph", num("weather_wind_mph"));
   maybeSet("crowd_energy", num("crowd_energy"));
   maybeSet("stands_open_pct", num("stands_open_pct"));
   maybeSet("staff_per_stand", num("staff_per_stand"));
+  maybeSet("seats_open_pct", num("seats_open_pct"));
 
   if (promotion) o.promotion_type = promotion;
 
@@ -56,12 +59,14 @@ export function overridesToSearchParams(overrides: SimulateOverrides): URLSearch
     p.set(k, v ? "1" : "0");
   };
 
+  if (overrides.venue_id) p.set("venue_id", overrides.venue_id);
   setNum("attendance", overrides.attendance);
   setNum("student_ratio", overrides.student_ratio);
   setNum("weather_wind_mph", overrides.weather_wind_mph);
   setNum("crowd_energy", overrides.crowd_energy);
   setNum("stands_open_pct", overrides.stands_open_pct);
   setNum("staff_per_stand", overrides.staff_per_stand);
+  setNum("seats_open_pct", overrides.seats_open_pct);
 
   if (overrides.promotion_type) p.set("promotion_type", overrides.promotion_type);
 

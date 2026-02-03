@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Home, BarChart3, GitCompare, FlaskConical, Target, Bookmark, Radio } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -15,6 +15,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { href: "/", label: "Sports", icon: <Home className="w-5 h-5" />, description: "Pick a sport dashboard" },
   { href: "/dashboard", label: "Dashboard", icon: <Home className="w-5 h-5" />, description: "Overview and quick stats" },
   { href: "/games", label: "Team", icon: <BarChart3 className="w-5 h-5" />, description: "Browse games and simulations" },
   { href: "/compare", label: "Compare", icon: <GitCompare className="w-5 h-5" />, description: "Side-by-side scenarios" },
@@ -31,6 +32,13 @@ const QUICK_LINKS: NavItem[] = [
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const sport = searchParams?.get("sport");
+
+  const withSport = (href: string) => {
+    if (!sport || href.includes("?")) return href;
+    return `${href}?sport=${sport}`;
+  };
 
   // Close on route change
   useEffect(() => {
@@ -118,7 +126,7 @@ export function MobileNav() {
                         transition={{ delay: index * 0.05 }}
                       >
                         <Link
-                          href={item.href}
+                          href={withSport(item.href)}
                           className={cn(
                             "flex items-center gap-3 p-3 rounded-xl transition-all",
                             isActive(item.href)
@@ -162,7 +170,7 @@ export function MobileNav() {
                       {QUICK_LINKS.map((item) => (
                         <Link
                           key={item.href}
-                          href={item.href}
+                          href={withSport(item.href)}
                           className={cn(
                             "flex items-center gap-3 p-3 rounded-xl transition-all",
                             isActive(item.href)
@@ -202,4 +210,3 @@ export function MobileNav() {
     </>
   );
 }
-

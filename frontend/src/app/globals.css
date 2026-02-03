@@ -105,9 +105,14 @@ body {
   letter-spacing: 0.02em;
 }
 
+html {
+  overflow-y: scroll;
+  scroll-behavior: auto;
+}
+
 html,
 body {
-  height: 100%;
+  min-height: 100%;
 }
 
 .card {
@@ -253,6 +258,11 @@ body {
 }
 
 .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
   background: linear-gradient(180deg, hsl(var(--scarlet-2)), hsl(var(--scarlet)));
   color: white;
   box-shadow:
@@ -264,6 +274,11 @@ body {
 }
 
 .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
   background: hsl(var(--glass-2));
   border: 1px solid hsl(var(--glass-border));
   backdrop-filter: blur(12px);

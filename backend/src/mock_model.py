@@ -48,6 +48,7 @@ class HfaInputs:
     kickoff_time_local: str
     promotion_type: PromotionType
     crowd_energy: int  # 0-100
+    is_indoor: bool = False  # Indoor venues (basketball, etc.) have no wind/weather effect
 
 
 def predict_hfa(inputs: HfaInputs) -> dict[str, Any]:
@@ -79,13 +80,15 @@ def predict_hfa(inputs: HfaInputs) -> dict[str, Any]:
     }
 
     # Coefficients chosen to produce believable deltas (few %-pts).
+    # Indoor venues (basketball, etc.): no wind/weather effect
+    wind_penalty = 0.0 if inputs.is_indoor else -0.15 * max(0.0, (inputs.weather_wind_mph - 10) / 10.0)
     intercept = 0.25
     terms: dict[str, float] = {
         "attendance_fill": 1.10 * (fill_clamped - 0.85),
         "student_ratio": 0.90 * (inputs.student_ratio - 0.18),
         "rivalry": 0.25 * rivalry,
         "rank_edge": 0.85 * rank_edge,
-        "wind_penalty": -0.15 * max(0.0, (inputs.weather_wind_mph - 10) / 10.0),
+        "wind_penalty": wind_penalty,
         "night_kick": 0.08 * night,
         "promotion": promo_map[inputs.promotion_type],
         "crowd_energy": 0.35 * energy_effect,
@@ -96,11 +99,11 @@ def predict_hfa(inputs: HfaInputs) -> dict[str, Any]:
 
     # --- Uncertainty (mock, deterministic) ---
     # We model uncertainty on the logit scale and map to probability bounds.
-    # Intuition: bigger rank gaps, extreme weather, and lower fill increase volatility.
+    # Indoor: no weather uncertainty.
     sd_parts = {
         "base_model_noise": 0.18,
         "rank_uncertainty": 0.06 * abs(rank_edge),
-        "weather_uncertainty": 0.04 * _clamp(inputs.weather_wind_mph / 25.0, 0.0, 1.0),
+        "weather_uncertainty": 0.0 if inputs.is_indoor else 0.04 * _clamp(inputs.weather_wind_mph / 25.0, 0.0, 1.0),
         "crowd_uncertainty": 0.04 * (1.0 - _clamp(fill_clamped, 0.0, 1.0)),
         "rivalry_variance": 0.03 * rivalry,
     }
@@ -183,8 +186,10 @@ def simulate_concessions(
     staff_per_stand: int,
     express_lanes: bool,
     early_arrival_promo: bool,
+    venue: dict | None = None,
+    is_indoor: bool = False,
 ) -> dict[str, Any]:
-    venue = load_venue()
+    venue = venue or load_venue()
     menu = load_concessions_menu()
 
     attendance = max(0, int(attendance))
@@ -198,7 +203,8 @@ def simulate_concessions(
 
     adj = menu["adjustments"]
     mult = 1.0
-    if weather_temp_f <= 45:
+    # Indoor venues: no cold-weather spend boost (climate controlled)
+    if not is_indoor and weather_temp_f <= 45:
         mult *= 1.0 + (float(adj["cold_weather_spend_boost_pct"]) / 100.0)
     if _is_night(kickoff_time_local):
         mult *= 1.0 + (float(adj["night_game_spend_boost_pct"]) / 100.0)
@@ -224,7 +230,7 @@ def simulate_concessions(
     # Revenue uncertainty (percentage), then map to dollars
     sd_rev_pct = 0.06
     sd_rev_pct += 0.04 * abs(student_ratio - 0.18)
-    sd_rev_pct += 0.02 if weather_temp_f <= 45 else 0.0
+    sd_rev_pct += 0.02 if (not is_indoor and weather_temp_f <= 45) else 0.0
     sd_rev_pct += 0.01 if _is_night(kickoff_time_local) else 0.0
     sd_rev_pct = float(_clamp(sd_rev_pct, 0.05, 0.14))
     ci_rev_low = float(revenue_total * (1.0 - 1.645 * sd_rev_pct))
@@ -401,7 +407,7 @@ def simulate_concessions(
             "sd_revenue_pct": sd_rev_pct,
             "drivers": {
                 "student_ratio": float(student_ratio),
-                "cold_weather": bool(weather_temp_f <= 45),
+                "cold_weather": bool(not is_indoor and weather_temp_f <= 45),
                 "night_game": bool(_is_night(kickoff_time_local)),
                 "promotion_type": promotion_type,
             },

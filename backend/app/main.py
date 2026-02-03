@@ -26,7 +26,7 @@ from src.schemas import (
 from src.optimizer import optimize_game
 from src.scenario_store import create_scenario, delete_scenario, get_scenario, list_scenarios, to_dict
 from src.sensitivity import hfa_sensitivity_surface
-from src.storage import get_game, load_games, load_venue
+from src.storage import get_game, get_venue, load_games
 from src.monte_carlo import run_monte_carlo
 
 app = FastAPI(title="Fan Impact Engine (MVP)", version="0.1.0")
@@ -67,9 +67,12 @@ def simulate_game(game_id: str, req: SimulateRequest) -> GameSimulateResponse:
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    venue = load_venue()
+    overrides = req.overrides.model_dump(exclude_none=True)
+    effective_venue_id = overrides.pop("venue_id", None) or game.venue_id
+    venue = get_venue(effective_venue_id)
     defaults = venue.get("concessions", {})
     crowd_defaults = venue.get("crowd", {})
+    effective_cap = int(venue.get("capacity", game.venue_capacity))
 
     # Baseline scenario for this game
     base = {
@@ -85,18 +88,23 @@ def simulate_game(game_id: str, req: SimulateRequest) -> GameSimulateResponse:
         "crowd_energy": int(crowd_defaults.get("default_crowd_energy", 70)),
         "stands_open_pct": int(defaults.get("default_stands_open_pct", 85)),
         "staff_per_stand": int(defaults.get("default_staff_per_stand", 6)),
+        "seats_open_pct": 100,
         "express_lanes": False,
         "early_arrival_promo": False,
+        "venue_capacity": effective_cap,
     }
-
-    overrides = req.overrides.model_dump(exclude_none=True)
     cf = {**base, **overrides}
 
     def run_one(s: dict) -> dict:
+        # McMahon & Quintanar: more empty seats (lower fill) hurts home team. Effective capacity = cap * seats_open_pct/100.
+        seats_open = int(s.get("seats_open_pct", 100))
+        cap = int(s.get("venue_capacity", game.venue_capacity))
+        effective_cap = max(1, int(cap * seats_open / 100))
+        is_indoor = bool(venue.get("is_indoor", False))
         hfa = predict_hfa(
             HfaInputs(
                 attendance=int(s["attendance"]),
-                venue_capacity=game.venue_capacity,
+                venue_capacity=effective_cap,
                 student_ratio=float(s["student_ratio"]),
                 rivalry_flag=bool(game.rivalry_flag),
                 opponent_rank=int(s["opponent_rank"]),
@@ -105,11 +113,12 @@ def simulate_game(game_id: str, req: SimulateRequest) -> GameSimulateResponse:
                 kickoff_time_local=str(s["kickoff_time_local"]),
                 promotion_type=s["promotion_type"],
                 crowd_energy=int(s["crowd_energy"]),
+                is_indoor=is_indoor,
             )
         )
         noise = predict_loudness_db(
             attendance=int(s["attendance"]),
-            venue_capacity=game.venue_capacity,
+            venue_capacity=cap,
             rivalry_flag=bool(game.rivalry_flag),
             kickoff_time_local=str(s["kickoff_time_local"]),
             crowd_energy=int(s["crowd_energy"]),
@@ -124,6 +133,8 @@ def simulate_game(game_id: str, req: SimulateRequest) -> GameSimulateResponse:
             staff_per_stand=int(s["staff_per_stand"]),
             express_lanes=bool(s["express_lanes"]),
             early_arrival_promo=bool(s["early_arrival_promo"]),
+            venue=venue,
+            is_indoor=is_indoor,
         )
         return {"hfa": hfa, "noise": noise, "concessions": concessions}
 
@@ -143,7 +154,7 @@ def simulate_game(game_id: str, req: SimulateRequest) -> GameSimulateResponse:
 
 @app.post("/predict/hfa", response_model=HfaResponse)
 def predict_hfa_global(scenario: ScenarioRequest) -> HfaResponse:
-    venue = load_venue()
+    venue = get_venue(None)
     cap = int(venue.get("capacity", 102780))
     res = predict_hfa(
         HfaInputs(

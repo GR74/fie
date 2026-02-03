@@ -2,8 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
-import Lenis from "lenis";
-import { PropsWithChildren, useEffect, useMemo, createContext, useContext } from "react";
+import { PropsWithChildren, useMemo, createContext, useContext } from "react";
 
 import { CinematicCanvas } from "@/components/cinematic/CinematicCanvas";
 
@@ -15,29 +14,7 @@ export function CinematicShell({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const reduce = useReducedMotion();
 
-  // Weighted scroll rig
-  useEffect(() => {
-    if (reduce) return;
-    const lenis = new Lenis({
-      duration: 1.05,
-      smoothWheel: true,
-      wheelMultiplier: 0.9,
-      touchMultiplier: 1.0,
-      lerp: 0.08,
-    });
-
-    let raf = 0;
-    const loop = (time: number) => {
-      lenis.raf(time);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      lenis.destroy();
-    };
-  }, [reduce]);
+  // Lenis smooth scroll removed - was blocking scroll past viewport on long pages
 
   // Enhanced page transition variants
   const variants = useMemo(() => {

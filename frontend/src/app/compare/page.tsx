@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import Link from "next/link";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, X, ArrowRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { GlassCard, GlassSectionTitle, Chip, GlassButton } from "@/components/ui/glass";
+import { Plus, X, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { GlassCard, GlassSectionTitle } from "@/components/ui/glass";
 import { HudDivider } from "@/components/ui/hud";
 import { simulateGame, getGame } from "@/lib/api";
 import type { SimulateOverrides } from "@/lib/api";
+import { SportHeader } from "@/components/SportSwitcher";
+import { getSportScope, isProfessionalSportId } from "@/lib/sports";
+import { useSearchParams } from "next/navigation";
 
 interface ScenarioSlot {
   id: string;
@@ -20,32 +22,53 @@ interface ScenarioSlot {
 const SLOT_COLORS = ["#bb0000", "#22c55e", "#f59e0b", "#3b82f6"];
 const SLOT_NAMES = ["Scenario A", "Scenario B", "Scenario C", "Scenario D"];
 
-const PRESET_SCENARIOS: ScenarioSlot[] = [
+const buildPresetScenarios = (sport: ReturnType<typeof getSportScope>): ScenarioSlot[] => {
+  const showStudentRatio = !isProfessionalSportId(sport.id);
+  return [
   {
     id: "baseline",
     name: "Baseline",
-    overrides: { crowd_energy: 78 },
+    overrides: { crowd_energy: sport.defaults.crowdEnergy },
     color: "#6b7280",
   },
   {
     id: "max_atmosphere",
     name: "Max Atmosphere",
-    overrides: { attendance: 102780, student_ratio: 0.26, crowd_energy: 95, stands_open_pct: 100, staff_per_stand: 8 },
+    overrides: {
+      attendance: sport.ranges.attendance.max,
+      ...(showStudentRatio ? { student_ratio: sport.ranges.studentRatioPermille.max / 1000 } : {}),
+      crowd_energy: sport.ranges.crowdEnergy.max,
+      stands_open_pct: 100,
+      staff_per_stand: Math.min(12, sport.ranges.staffPerStand.max),
+    },
     color: "#bb0000",
   },
   {
     id: "revenue_focus",
     name: "Revenue Focus",
-    overrides: { attendance: 98000, student_ratio: 0.18, crowd_energy: 70, stands_open_pct: 95, staff_per_stand: 10 },
+    overrides: {
+      attendance: Math.round(sport.ranges.attendance.max * 0.9),
+      ...(showStudentRatio ? { student_ratio: sport.defaults.studentRatio } : {}),
+      crowd_energy: Math.max(sport.ranges.crowdEnergy.min + 10, sport.defaults.crowdEnergy - 8),
+      stands_open_pct: 95,
+      staff_per_stand: Math.min(10, sport.ranges.staffPerStand.max),
+    },
     color: "#22c55e",
   },
   {
     id: "conservative",
     name: "Conservative",
-    overrides: { attendance: 95000, student_ratio: 0.20, crowd_energy: 65, stands_open_pct: 100, staff_per_stand: 10 },
+    overrides: {
+      attendance: Math.round(sport.ranges.attendance.max * 0.82),
+      ...(showStudentRatio ? { student_ratio: sport.defaults.studentRatio } : {}),
+      crowd_energy: Math.max(sport.ranges.crowdEnergy.min + 5, sport.defaults.crowdEnergy - 15),
+      stands_open_pct: 90,
+      staff_per_stand: Math.min(9, sport.ranges.staffPerStand.max),
+    },
     color: "#6b7280",
   },
 ];
+};
 
 function MetricCompare({
   label,
@@ -120,13 +143,21 @@ function DeltaIndicator({ value, baseline }: { value: number; baseline: number }
 }
 
 export default function ComparePage() {
+  const searchParams = useSearchParams();
+  const sport = getSportScope(searchParams?.get("sport"));
+  const presets = useMemo(() => buildPresetScenarios(sport), [sport]);
+
   const gameId = "michigan_at_osu_2026"; // Default game
-  const [slots, setSlots] = useState<(ScenarioSlot | null)[]>([
-    PRESET_SCENARIOS[0], // Baseline
-    PRESET_SCENARIOS[1], // Max Atmosphere
+  const [slots, setSlots] = useState<(ScenarioSlot | null)[]>(() => [
+    presets[0],
+    presets[1],
     null,
     null,
   ]);
+
+  useEffect(() => {
+    setSlots([presets[0], presets[1], null, null]);
+  }, [presets]);
 
   const gameQuery = useQuery({
     queryKey: ["game", gameId],
@@ -166,29 +197,10 @@ export default function ComparePage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="muted text-xs mb-2">
-            <Link href="/games" className="hover:underline">Games</Link>
-            {" / "}
-            <Link href={`/games/${gameId}`} className="hover:underline">{gameId}</Link>
-            {" / "}
-            <span className="font-medium">Compare</span>
-          </div>
-          <h1 className="display text-4xl font-semibold tracking-tight">
-            Scenario <span className="text-[hsl(var(--scarlet))]">Comparison</span>
-          </h1>
-          <p className="muted mt-1 text-sm max-w-xl">
-            Compare up to 4 scenarios side-by-side. See which combination of levers produces the best outcomes.
-          </p>
-        </div>
-        <Link href={`/games/${gameId}`}>
-          <GlassButton>
-            <ArrowRight className="w-4 h-4" /> Back to Simulator
-          </GlassButton>
-        </Link>
-      </div>
+      <SportHeader
+        title="Scenario Comparison"
+        subtitle="Compare up to 4 scenarios side-by-side. Presets shift to match the selected sport."
+      />
 
       {/* Scenario Slots */}
       <div className="grid grid-cols-4 gap-4">
@@ -256,7 +268,7 @@ export default function ComparePage() {
                 onClick={() => {
                   // Show preset selector or use next preset
                   const usedIds = slots.filter(Boolean).map((s) => s!.id);
-                  const nextPreset = PRESET_SCENARIOS.find((p) => !usedIds.includes(p.id));
+                  const nextPreset = presets.find((p) => !usedIds.includes(p.id));
                   if (nextPreset) {
                     addScenario(nextPreset);
                   }
@@ -274,7 +286,7 @@ export default function ComparePage() {
       {/* Quick Add Presets */}
       <div className="flex flex-wrap gap-2">
         <span className="text-xs text-white/40 py-1">Quick add:</span>
-        {PRESET_SCENARIOS.map((preset) => {
+        {presets.map((preset) => {
           const isUsed = slots.some((s) => s?.id === preset.id);
           const canAdd = slots.some((s) => s == null);
           return (
@@ -471,4 +483,3 @@ export default function ComparePage() {
     </div>
   );
 }
-

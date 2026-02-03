@@ -27,12 +27,14 @@ export function Heatmap({
   values,
   formatValue,
   title,
+  yLabelName = "Student ratio",
 }: {
   xLabels: number[];
   yLabels: number[];
   values: number[][];
   formatValue: (v: number) => string;
   title?: string;
+  yLabelName?: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<{ x: number; y: number; v: number } | null>(null);
@@ -133,7 +135,7 @@ export function Heatmap({
         <div className="pointer-events-none absolute left-3 top-3 rounded-xl bg-black/70 px-3 py-2 text-xs text-white backdrop-blur">
           <div className="font-semibold">{formatValue(hover.v)}</div>
           <div className="opacity-80">
-            Attendance: {xLabels[hover.x].toLocaleString()} • Student ratio:{" "}
+            Attendance: {xLabels[hover.x].toLocaleString()} • {yLabelName}:{" "}
             {(yLabels[hover.y] * 100).toFixed(1)}%
           </div>
         </div>
@@ -141,5 +143,4 @@ export function Heatmap({
     </div>
   );
 }
-
 

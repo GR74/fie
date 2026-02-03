@@ -43,8 +43,14 @@ export type Game = {
   home_team: string;
   away_team: string;
   sport: string;
+  venue_id?: string | null;
   venue_name: string;
   venue_capacity: number;
+  is_indoor?: boolean;
+  alternate_venue_id?: string | null;
+  alternate_venue_name?: string | null;
+  alternate_venue_capacity?: number | null;
+  league_preset?: "college_football" | "college_other" | "minor_league" | "startup_league" | null;
   kickoff_time_local: string;
   rivalry_flag: boolean;
   game_stakes: string;
@@ -62,6 +68,7 @@ export type GamesListResponse = { games: Game[] };
 export type GameDetailResponse = { game: Game };
 
 export type SimulateOverrides = Partial<{
+  venue_id: string;
   attendance: number;
   student_ratio: number;
   opponent_rank: number;
@@ -74,6 +81,7 @@ export type SimulateOverrides = Partial<{
   crowd_energy: number;
   stands_open_pct: number;
   staff_per_stand: number;
+  seats_open_pct: number;
   express_lanes: boolean;
   early_arrival_promo: boolean;
 }>;
@@ -162,6 +170,8 @@ export async function simulateGame(gameId: string, overrides: SimulateOverrides)
   );
 }
 
+export type ObjectiveMode = "profit" | "fan_growth" | "mission";
+
 export type OptimizeRequest = {
   current_overrides?: SimulateOverrides;
   max_attendance_increase?: number;
@@ -170,6 +180,7 @@ export type OptimizeRequest = {
   max_staff_per_stand?: number;
   min_stands_open_pct?: number;
   target_delta_win_pp?: number | null;
+  objective_mode?: ObjectiveMode;
 };
 
 export type OptimizeCandidate = {
