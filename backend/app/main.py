@@ -168,6 +168,7 @@ def predict_hfa_global(scenario: ScenarioRequest) -> HfaResponse:
             kickoff_time_local=str(scenario.kickoff_time_local),
             promotion_type=scenario.promotion,
             crowd_energy=int(scenario.crowd_energy),
+            is_indoor=bool(getattr(scenario, "is_indoor", False)),
         )
     )
     return HfaResponse(**res)
@@ -312,5 +313,4 @@ def monte_carlo(game_id: str, req: SimulateRequest) -> dict:
     )
     
     return {"game_id": game_id, **result}
-
 

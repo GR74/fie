@@ -16,6 +16,7 @@ export type SportScope = {
   description: string;
   eventTimeLabel: string;
   objectiveDefault: ObjectiveMode;
+  isIndoor: boolean;
   ranges: {
     attendance: { min: number; max: number; step: number };
     studentRatioPermille: { min: number; max: number; step: number };
@@ -47,6 +48,7 @@ export const SPORT_SCOPES: SportScope[] = [
       "Peak-capacity Saturdays. Biggest HFA swings, weather sensitivity, and crowd-energy leverage.",
     eventTimeLabel: "Kickoff time",
     objectiveDefault: "profit",
+    isIndoor: false,
     ranges: {
       attendance: { min: 80000, max: 105000, step: 250 },
       studentRatioPermille: { min: 120, max: 260, step: 1 },
@@ -81,6 +83,7 @@ export const SPORT_SCOPES: SportScope[] = [
       "Indoor arena leverage: Schott vs Covelli hosting, student mix, and tempo-driven concessions.",
     eventTimeLabel: "Tip-off time",
     objectiveDefault: "mission",
+    isIndoor: true,
     ranges: {
       attendance: { min: 6000, max: 20000, step: 100 },
       studentRatioPermille: { min: 150, max: 420, step: 1 },
@@ -115,6 +118,7 @@ export const SPORT_SCOPES: SportScope[] = [
       "High-intensity, smaller bowl decisions: ticket caps, student allocation, and venue upgrades.",
     eventTimeLabel: "Serve time",
     objectiveDefault: "mission",
+    isIndoor: true,
     ranges: {
       attendance: { min: 2500, max: 8000, step: 50 },
       studentRatioPermille: { min: 160, max: 450, step: 1 },
@@ -149,6 +153,7 @@ export const SPORT_SCOPES: SportScope[] = [
       "Longer event arcs: weather, family bundles, and steady concessions throughput.",
     eventTimeLabel: "First pitch",
     objectiveDefault: "mission",
+    isIndoor: false,
     ranges: {
       attendance: { min: 1200, max: 12000, step: 50 },
       studentRatioPermille: { min: 120, max: 350, step: 1 },
@@ -183,6 +188,7 @@ export const SPORT_SCOPES: SportScope[] = [
       "Balance growth vs margin for affiliate clubs and non-premium inventory.",
     eventTimeLabel: "Start time",
     objectiveDefault: "fan_growth",
+    isIndoor: false,
     ranges: {
       attendance: { min: 2000, max: 14000, step: 100 },
       studentRatioPermille: { min: 80, max: 280, step: 1 },
@@ -214,6 +220,7 @@ export const SPORT_SCOPES: SportScope[] = [
       "Early-stage leagues: build atmosphere credibility before maximizing profit.",
     eventTimeLabel: "Start time",
     objectiveDefault: "fan_growth",
+    isIndoor: false,
     ranges: {
       attendance: { min: 1500, max: 10000, step: 100 },
       studentRatioPermille: { min: 100, max: 320, step: 1 },
@@ -271,6 +278,7 @@ export function buildScenarioDefaults(sport: SportScope) {
     opponent_rank: sport.id === "football" ? 6 : 14,
     home_rank: sport.id === "football" ? 4 : 12,
     weather_wind: sport.defaults.windMph,
+    is_indoor: sport.isIndoor,
     kickoff_time_local: "19:00",
     promotion: "student_push" as const,
     crowd_energy: sport.defaults.crowdEnergy,

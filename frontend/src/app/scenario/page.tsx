@@ -17,6 +17,7 @@ export default function ScenarioLabPage() {
   const searchParams = useSearchParams();
   const sport = getSportScope(searchParams?.get("sport"));
   const showStudentRatio = !isProfessionalSportId(sport.id);
+  const isIndoor = sport.isIndoor;
 
   const [scenario, setScenario] = useState<GlobalScenario>(() => buildScenarioDefaults(sport));
 
@@ -97,15 +98,17 @@ export default function ScenarioLabPage() {
             onChange={(v) => setScenario((s) => ({ ...s, home_rank: v }))}
           />
 
-          <Control
-            label="Wind (mph)"
-            value={scenario.weather_wind}
-            min={sport.ranges.windMph.min}
-            max={sport.ranges.windMph.max}
-            step={sport.ranges.windMph.step}
-            format={(v) => `${v} mph`}
-            onChange={(v) => setScenario((s) => ({ ...s, weather_wind: v }))}
-          />
+          {!isIndoor && (
+            <Control
+              label="Wind (mph)"
+              value={scenario.weather_wind}
+              min={sport.ranges.windMph.min}
+              max={sport.ranges.windMph.max}
+              step={sport.ranges.windMph.step}
+              format={(v) => `${v} mph`}
+              onChange={(v) => setScenario((s) => ({ ...s, weather_wind: v }))}
+            />
+          )}
 
           <Control
             label="Crowd energy"

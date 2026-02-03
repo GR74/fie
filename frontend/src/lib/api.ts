@@ -240,6 +240,7 @@ export type GlobalScenario = {
   opponent_rank: number;
   home_rank: number;
   weather_wind: number;
+  is_indoor?: boolean;
   kickoff_time_local: string;
   promotion: PromotionType;
   crowd_energy: number;
@@ -294,5 +295,4 @@ export type HfaCalibrationReport = {
 export async function getHfaCalibration() {
   return apiFetch<HfaCalibrationReport>("/calibration/hfa");
 }
-
 

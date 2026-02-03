@@ -94,6 +94,7 @@ class ScenarioRequest(BaseModel):
     opponent_rank: int = Field(ge=1, le=25, description="25 = unranked proxy")
     home_rank: int = Field(ge=1, le=25, description="25 = unranked proxy")
     weather_wind: int = Field(ge=0)
+    is_indoor: bool = Field(default=False, description="Indoor venues ignore wind effects")
     kickoff_time_local: str = Field(default="12:00", description="HH:MM (24h)")
     promotion: PromotionType = "none"
     crowd_energy: int = Field(default=70, ge=0, le=100)
@@ -225,5 +226,4 @@ class SensitivityResponse(BaseModel):
     student_ratio: list[float]
     win_probability: list[list[float]]
     meta: dict[str, Any] | None = None
-
 
