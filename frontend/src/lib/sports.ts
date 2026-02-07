@@ -192,7 +192,7 @@ export const SPORT_SCOPES: SportScope[] = [
     ranges: {
       attendance: { min: 2000, max: 14000, step: 100 },
       studentRatioPermille: { min: 80, max: 280, step: 1 },
-      crowdEnergy: { min: 40, max: 95, step: 1 },
+      crowdEnergy: { min: 40, max: 100, step: 1 },
       seatsOpenPct: { min: 40, max: 100, step: 5 },
       standsOpenPct: { min: 50, max: 100, step: 1 },
       staffPerStand: { min: 2, max: 12, step: 1 },

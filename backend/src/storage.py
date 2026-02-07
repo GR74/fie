@@ -15,6 +15,14 @@ def load_games() -> list[Game]:
     for item in raw:
         venue = get_venue(item.get("venue_id"))
         item = {**item, "is_indoor": bool(venue.get("is_indoor", False))}
+        # Normalize capacities from venue configs to prevent mismatches (e.g., Covelli vs Schott).
+        item["venue_capacity"] = int(venue.get("capacity", item.get("venue_capacity", 0)))
+        alt_id = item.get("alternate_venue_id")
+        if alt_id:
+            alt_venue = get_venue(alt_id)
+            item["alternate_venue_capacity"] = int(
+                alt_venue.get("capacity", item.get("alternate_venue_capacity", 0))
+            )
         result.append(Game.model_validate(item))
     return result
 
@@ -56,5 +64,4 @@ def get_game(game_id: str) -> Game | None:
         if g.game_id == game_id:
             return g
     return None
-
 

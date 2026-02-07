@@ -205,7 +205,20 @@ export default function GamePage() {
     sportScope.ranges.attendance.max,
     effectiveVenueCapacity ?? sportScope.ranges.attendance.max,
   );
-  const attendanceMin = Math.min(sportScope.ranges.attendance.min, attendanceMax);
+  const attendanceMinRaw = Math.min(sportScope.ranges.attendance.min, attendanceMax);
+  const attendanceMin =
+    attendanceMinRaw >= attendanceMax
+      ? Math.max(0, Math.floor(attendanceMax * 0.2))
+      : attendanceMinRaw;
+
+  useEffect(() => {
+    if (!game) return;
+    const cap = effectiveVenueCapacity || game.venue_capacity;
+    const current = overrides.attendance ?? game.baseline_attendance;
+    if (current > cap) {
+      setOverrides((prev) => ({ ...prev, attendance: cap }));
+    }
+  }, [game, effectiveVenueCapacity, overrides.attendance]);
 
   // Feed cinematic telemetry so the 3D layer reacts to real outputs.
   useEffect(() => {
