@@ -111,17 +111,30 @@ export default function GamePage() {
       }),
   });
 
-  // Gentle initial defaults once game loads.
+  // Gentle initial defaults once game loads. Clamp student_ratio to sport range so UI and API agree.
   useEffect(() => {
     const g = gameQuery.data?.game;
     if (!g) return;
-    setOverrides((prev) => ({
-      ...prev,
-      crowd_energy: prev.crowd_energy ?? 78,
-      stands_open_pct: prev.stands_open_pct ?? 85,
-      staff_per_stand: prev.staff_per_stand ?? 6,
-      seats_open_pct: prev.seats_open_pct ?? 100,
-    }));
+    const scope = getSportScopeForGame(g);
+    const showSr = g.league_preset !== "minor_league" && g.league_preset !== "startup_league";
+    setOverrides((prev) => {
+      const next = {
+        ...prev,
+        crowd_energy: prev.crowd_energy ?? 78,
+        stands_open_pct: prev.stands_open_pct ?? 85,
+        staff_per_stand: prev.staff_per_stand ?? 6,
+        seats_open_pct: prev.seats_open_pct ?? 100,
+      };
+      if (showSr) {
+        const minR = scope.ranges.studentRatioPermille.min / 1000;
+        const maxR = scope.ranges.studentRatioPermille.max / 1000;
+        const current = prev.student_ratio ?? g.baseline_student_ratio ?? 0;
+        if (current < minR || current > maxR) {
+          next.student_ratio = Math.max(minR, Math.min(maxR, current));
+        }
+      }
+      return next;
+    });
   }, [gameQuery.data?.game]);
 
   // League preset: default objective for startup/minor league
@@ -1140,12 +1153,13 @@ function Control({
   format: (v: number | undefined) => string;
   onChange: (v: number) => void;
 }) {
-  const v = value ?? placeholder ?? min;
+  const raw = value ?? placeholder ?? min;
+  const v = Math.max(min, Math.min(max, raw));
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 text-xs">
         <div className="font-semibold">{label}</div>
-        <div className="muted font-mono">{format(value ?? placeholder)}</div>
+        <div className="muted font-mono">{format(v)}</div>
       </div>
       <input
         type="range"
