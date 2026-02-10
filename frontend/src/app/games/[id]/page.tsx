@@ -15,10 +15,10 @@ import {
 } from "recharts";
 
 import { cn } from "@/lib/cn";
-import type { GameSimulateResponse, PromotionType, SimulateOverrides } from "@/lib/api";
-import { createScenario, getGame, optimizeGame, simulateGame } from "@/lib/api";
+import type { GameSimulateResponse, PromotionType, SimulateOverrides, EnrichedGame } from "@/lib/api";
+import { createScenario, getGame, getEnrichedGame, optimizeGame, simulateGame } from "@/lib/api";
 import { overridesToSearchParams, parseOverridesFromSearchParams } from "@/lib/scenarioUrl";
-import { Chip, GlassButton, GlassCard, GlassSectionTitle } from "@/components/ui/glass";
+import { Chip, GlassButton, GlassCard, GlassSectionTitle, Control, Toggle } from "@/components/ui/glass";
 import { HudDivider, StatBar } from "@/components/ui/hud";
 import { useTelemetry } from "@/components/cinematic/Telemetry";
 import { StadiumFillViz } from "@/components/viz/StadiumFillViz";
@@ -27,6 +27,7 @@ import { PerformanceGauges } from "@/components/viz/PerformanceGauges";
 import { PresetSelector, PresetButtons } from "@/components/PresetSelector";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { RecommendationsPanel } from "@/components/RecommendationsPanel";
+import { DataBadge, DataSourceBar, ModelStatusBadge, WeatherBadge } from "@/components/ui/data-badge";
 import { getSportScopeForGame, isProfessionalGame } from "@/lib/sports";
 import { useKeyboardShortcuts, type ShortcutAction } from "@/hooks/useKeyboardShortcuts";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -84,6 +85,16 @@ export default function GamePage() {
     queryKey: ["game", gameId],
     queryFn: () => getGame(gameId),
   });
+
+  const enrichedQuery = useQuery({
+    queryKey: ["enriched", gameId],
+    queryFn: () => getEnrichedGame(gameId),
+    enabled: !!gameId,
+    staleTime: 60_000 * 5, // 5 min cache — live data doesn't change that fast
+    retry: 1,
+  });
+
+  const enriched = enrichedQuery.data;
 
   const simulateQuery = useQuery({
     queryKey: ["simulate", gameId, stableOverrides],
@@ -326,6 +337,33 @@ export default function GamePage() {
               A high-fidelity, Ohio State–inspired simulator: crowd composition, loudness, and concessions ops all roll up
               into a single game-day decision surface.
             </p>
+
+            {/* Live data indicators */}
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <ModelStatusBadge />
+              {enriched?.weather && enriched.weather.source !== "N/A" && (
+                <WeatherBadge
+                  source={enriched.weather.source}
+                  temp={enriched.weather.temp_f}
+                  wind={enriched.weather.wind_mph}
+                  conditions={enriched.weather.conditions}
+                />
+              )}
+              {enriched?.live?._espn_matched && (
+                <DataBadge status="LIVE" label="ESPN LIVE" />
+              )}
+              {enriched?.live?.live_attendance && (
+                <span className="text-[11px] text-green-400">
+                  Actual attendance: {enriched.live.live_attendance.toLocaleString()}
+                </span>
+              )}
+              {enriched?.live?.live_broadcast && (
+                <span className="text-[11px] text-zinc-400">
+                  TV: {enriched.live.live_broadcast}
+                </span>
+              )}
+            </div>
+            {enriched?.data_sources && <DataSourceBar sources={enriched.data_sources} />}
           </div>
         </div>
 
@@ -425,19 +463,23 @@ export default function GamePage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <StatBar
-          label="Stadium_fill"
+          label="Stadium fill"
           value={`${fillPct.toFixed(1)}%`}
-          sub="Attendance vs capacity"
-          tone="neutral"
+          sub="Attendance vs effective capacity"
+          tone={fillPct >= 95 ? "scarlet" : fillPct >= 80 ? "good" : "neutral"}
+          numericValue={fillPct}
+          maxValue={100}
         />
         <StatBar
-          label="Crowd_energy"
+          label="Crowd energy"
           value={`${overrides.crowd_energy ?? 78}/100`}
           sub="Controls decibels + small HFA bump"
           tone="scarlet"
+          numericValue={overrides.crowd_energy ?? 78}
+          maxValue={100}
         />
         <StatBar
-          label="Ops_pressure"
+          label="Ops pressure"
           value={`${(((sim?.counterfactual.concessions.ops.worst_utilization ?? 0) as number) * 100).toFixed(0)}%`}
           sub="Worst concessions utilization"
           tone={
@@ -447,6 +489,8 @@ export default function GamePage() {
                 ? "neutral"
                 : "good"
           }
+          numericValue={(sim?.counterfactual.concessions.ops.worst_utilization ?? 0) * 100}
+          maxValue={120}
         />
       </div>
 
@@ -499,28 +543,42 @@ export default function GamePage() {
             Note: win-probability shifts have diminishing returns near extremes because the model uses a sigmoid.
           </div>
 
-          <div className="mt-4 grid grid-cols-4 gap-2 text-xs">
+          <div className="mt-4 relative">
+            <div className="grid grid-cols-4 gap-1 rounded-xl p-1" style={{ background: "rgba(255,255,255,0.03)" }}>
               {(
                 [
-                  ["competitive", "Competitive"],
-                  ["atmosphere", "Atmosphere"],
-                  ["concessions", "Concessions"],
-                  ["optimize", "Optimize"],
+                  ["competitive", "Competitive", "\u2694\uFE0F"],
+                  ["atmosphere", "Atmosphere", "\uD83C\uDFB5"],
+                  ["concessions", "Concessions", "\uD83C\uDF7F"],
+                  ["optimize", "Optimize", "\u26A1"],
                 ] as const
-              ).map(([k, label]) => (
+              ).map(([k, label, icon]) => (
                 <button
                   key={k}
                   onClick={() => setTab(k)}
                   className={cn(
-                    "rounded-xl px-3 py-2 text-center font-semibold transition",
+                    "relative rounded-lg px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider transition-all duration-200",
                     tab === k
-                      ? "btn-primary"
-                      : "btn-ghost",
+                      ? "text-white"
+                      : "text-white/35 hover:text-white/55",
                   )}
                 >
-                  {label}
+                  {tab === k && (
+                    <motion.div
+                      layoutId="tab-indicator"
+                      className="absolute inset-0 rounded-lg"
+                      style={{
+                        background: "linear-gradient(135deg, hsl(354 78% 45% / 0.4), hsl(354 78% 35% / 0.2))",
+                        border: "1px solid hsl(354 78% 55% / 0.3)",
+                        boxShadow: "0 0 15px hsl(354 78% 55% / 0.15)",
+                      }}
+                      transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{label}</span>
                 </button>
               ))}
+            </div>
           </div>
 
           {optError ? (
@@ -874,11 +932,22 @@ export default function GamePage() {
           {isLoading ? (
             <div className="grid gap-4 md:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <GlassCard key={i} className="p-4">
-                  <div className="h-3 w-24 animate-pulse rounded bg-white/10" />
-                  <div className="mt-3 h-8 w-32 animate-pulse rounded bg-white/10" />
-                  <div className="mt-3 h-3 w-48 animate-pulse rounded bg-white/10" />
-                </GlassCard>
+                <motion.div
+                  key={i}
+                  className="relative rounded-2xl border border-white/[0.06] overflow-hidden p-4"
+                  style={{ background: "linear-gradient(145deg, hsl(220 18% 7%), hsl(224 16% 10%))" }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: i * 0.08 }}
+                >
+                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-white/10 via-white/5 to-transparent animate-pulse" />
+                  <div className="h-2.5 w-20 rounded bg-white/[0.06] animate-pulse" />
+                  <div className="mt-3 h-8 w-28 rounded-lg bg-white/[0.06] animate-pulse" />
+                  <div className="mt-3 h-2.5 w-40 rounded bg-white/[0.04] animate-pulse" />
+                  <div className="mt-4 pt-3 border-t border-white/[0.04]">
+                    <div className="h-2.5 w-24 rounded bg-white/[0.04] animate-pulse" />
+                  </div>
+                </motion.div>
               ))}
             </div>
           ) : null}
@@ -886,15 +955,16 @@ export default function GamePage() {
             <KpiCard
               title="Win probability"
               value={pct(cfWin)}
+              accent="scarlet"
               sub={
                 pctBand(
                   sim?.counterfactual.hfa.predicted_win_probability_ci_low,
                   sim?.counterfactual.hfa.predicted_win_probability_ci_high,
-                ) ?? `${pct(baselineWin)} baseline → ${pct(cfWin)} counterfactual`
+                ) ?? `${pct(baselineWin)} baseline \u2192 ${pct(cfWin)} counterfactual`
               }
               footer={
-                <span className={cn("font-semibold", deltaWin >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                  {deltaWin >= 0 ? "+" : ""}
+                <span className={cn("font-bold tabular-nums", deltaWin >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                  {deltaWin >= 0 ? "\u25B2 +" : "\u25BC "}
                   {(deltaWin * 100).toFixed(2)} pp
                 </span>
               }
@@ -902,118 +972,193 @@ export default function GamePage() {
             <KpiCard
               title="Loudness"
               value={`${(sim?.counterfactual.noise.projected_decibels ?? 0).toFixed(1)} dB`}
+              accent={
+                (sim?.counterfactual.noise.projected_decibels ?? 0) >= 110 ? "scarlet"
+                  : (sim?.counterfactual.noise.projected_decibels ?? 0) >= 100 ? "positive"
+                  : "default"
+              }
               sub={
                 dbBand(
                   sim?.counterfactual.noise.projected_decibels_ci_low,
                   sim?.counterfactual.noise.projected_decibels_ci_high,
-                ) ?? `${(sim?.baseline.noise.projected_decibels ?? 0).toFixed(1)} baseline`
+                ) ?? `${(sim?.baseline.noise.projected_decibels ?? 0).toFixed(1)} dB baseline`
               }
               footer={
-                <span className="muted">
-                  {(
-                    (sim?.counterfactual.noise.projected_decibels ?? 0) -
-                    (sim?.baseline.noise.projected_decibels ?? 0)
-                  ).toFixed(1)}{" "}
-                  dB change
-                </span>
+                (() => {
+                  const dbDelta = (sim?.counterfactual.noise.projected_decibels ?? 0) - (sim?.baseline.noise.projected_decibels ?? 0);
+                  return (
+                    <span className={cn("font-bold tabular-nums", dbDelta >= 0 ? "text-emerald-400/70" : "text-rose-400/70")}>
+                      {dbDelta >= 0 ? "+" : ""}{dbDelta.toFixed(1)} dB from baseline
+                    </span>
+                  );
+                })()
               }
             />
             <KpiCard
               title="Concessions revenue"
               value={usd(sim?.counterfactual.concessions.revenue_total_usd ?? 0)}
+              accent={
+                ((sim?.counterfactual.concessions.revenue_total_usd ?? 0) - (sim?.baseline.concessions.revenue_total_usd ?? 0)) > 0
+                  ? "positive" : "default"
+              }
               sub={
                 sim?.counterfactual.concessions.revenue_total_usd_ci_low != null &&
                 sim?.counterfactual.concessions.revenue_total_usd_ci_high != null
-                  ? `${usd(sim.counterfactual.concessions.revenue_total_usd_ci_low)}–${usd(
+                  ? `${usd(sim.counterfactual.concessions.revenue_total_usd_ci_low)}\u2013${usd(
                       sim.counterfactual.concessions.revenue_total_usd_ci_high,
-                    )} (90%)`
+                    )} (90% CI)`
                   : `${usd(sim?.baseline.concessions.revenue_total_usd ?? 0)} baseline`
               }
               footer={
-                <span className="muted">
-                  {usd(
-                    (sim?.counterfactual.concessions.revenue_total_usd ?? 0) -
-                      (sim?.baseline.concessions.revenue_total_usd ?? 0),
-                  )}{" "}
-                  delta
-                </span>
+                (() => {
+                  const revDelta = (sim?.counterfactual.concessions.revenue_total_usd ?? 0) - (sim?.baseline.concessions.revenue_total_usd ?? 0);
+                  return (
+                    <span className={cn("font-bold tabular-nums", revDelta >= 0 ? "text-emerald-400/70" : "text-rose-400/70")}>
+                      {revDelta >= 0 ? "+" : ""}{usd(revDelta)} delta
+                    </span>
+                  );
+                })()
               }
             />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <GlassCard className="p-4">
-              <GlassSectionTitle
-                title="Why win prob moved"
-                subtitle="Top feature contributions (percentage points)."
-              />
-              <div className="mt-3 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={contribChart as any} layout="vertical" margin={{ left: 18, right: 12 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                    <XAxis
-                      type="number"
-                      domain={contribDomain}
-                      tickFormatter={(v) => `${v.toFixed(1)}`}
-                    />
-                    <YAxis type="category" dataKey="lever" width={120} tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(v: number) => [`${Number(v).toFixed(2)} pp`, "impact"]}
-                      labelFormatter={(l) => `Lever: ${l}`}
-                    />
-                    <Bar dataKey="neg" fill="rgba(255,255,255,0.22)" radius={[6, 6, 6, 6]} />
-                    <Bar dataKey="pos" fill="hsl(var(--scarlet))" radius={[6, 6, 6, 6]} />
-                  </BarChart>
-                </ResponsiveContainer>
+            <motion.div
+              className="relative rounded-2xl border border-white/[0.08] overflow-hidden"
+              style={{
+                background: "linear-gradient(145deg, hsl(220 18% 7%) 0%, hsl(224 16% 10%) 50%, hsl(220 14% 7%) 100%)",
+              }}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+            >
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[hsl(354,78%,55%)] via-[hsl(354,78%,40%)]/50 to-transparent" />
+              <div className="p-4">
+                <GlassSectionTitle
+                  title="Why win prob moved"
+                  subtitle="Top feature contributions (percentage points)"
+                />
+                <div className="mt-3 h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={contribChart as any} layout="vertical" margin={{ left: 18, right: 12 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis
+                        type="number"
+                        domain={contribDomain}
+                        tickFormatter={(v) => `${v.toFixed(1)}`}
+                        tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }}
+                        axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="lever"
+                        width={110}
+                        tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 500 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        formatter={(v: number) => [`${Number(v).toFixed(2)} pp`, "impact"]}
+                        labelFormatter={(l) => `Lever: ${l}`}
+                        contentStyle={{
+                          background: "hsl(220 18% 10%)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "12px",
+                          fontSize: "12px",
+                        }}
+                      />
+                      <Bar dataKey="neg" fill="rgba(251,113,133,0.4)" radius={[4, 4, 4, 4]} />
+                      <Bar dataKey="pos" fill="hsl(354 78% 55%)" radius={[4, 4, 4, 4]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </GlassCard>
+            </motion.div>
 
-            <GlassCard className="p-4">
-              <GlassSectionTitle
-                title="Concessions wait time"
-                subtitle="Bands by window + utilization."
-                right={
-                  <span className="chip rounded-full px-3 py-1 text-[11px] font-semibold muted">
-                    worst util{" "}
-                    {(((sim?.counterfactual.concessions.ops.worst_utilization ?? 0) as number) * 100).toFixed(0)}%
-                  </span>
-                }
-              />
-              <div className="mt-3 space-y-2 text-sm">
-                {(sim?.counterfactual.concessions.ops.wait_time_windows ?? []).map((w) => (
-                  <div key={w.window} className="flex items-center justify-between rounded-xl bg-black/5 px-3 py-2 dark:bg-white/10">
-                    <div className="font-semibold">
-                      {w.window === "pre_kick"
-                        ? "Pre-kick"
-                        : w.window === "halftime"
-                          ? "Halftime"
-                          : "Q4"}
+            <motion.div
+              className="relative rounded-2xl border border-white/[0.08] overflow-hidden"
+              style={{
+                background: "linear-gradient(145deg, hsl(220 18% 7%) 0%, hsl(224 16% 10%) 50%, hsl(220 14% 7%) 100%)",
+              }}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.05 }}
+            >
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-400/80 via-amber-500/30 to-transparent" />
+              <div className="p-4">
+                <GlassSectionTitle
+                  title="Concessions wait time"
+                  subtitle="Queue bands by period"
+                  right={
+                    <span
+                      className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
+                      style={{
+                        background: (sim?.counterfactual.concessions.ops.worst_utilization ?? 0) > 0.9
+                          ? "rgba(239,68,68,0.12)" : "rgba(52,211,153,0.1)",
+                        color: (sim?.counterfactual.concessions.ops.worst_utilization ?? 0) > 0.9
+                          ? "#ef4444" : "#34d399",
+                        border: `1px solid ${(sim?.counterfactual.concessions.ops.worst_utilization ?? 0) > 0.9
+                          ? "rgba(239,68,68,0.2)" : "rgba(52,211,153,0.2)"}`,
+                      }}
+                    >
+                      {(((sim?.counterfactual.concessions.ops.worst_utilization ?? 0) as number) * 100).toFixed(0)}% peak
+                    </span>
+                  }
+                />
+                <div className="mt-3 space-y-2">
+                  {(sim?.counterfactual.concessions.ops.wait_time_windows ?? []).map((w) => {
+                    const utilColor = w.utilization > 1.0 ? "#ef4444" : w.utilization > 0.9 ? "#f59e0b" : w.utilization > 0.7 ? "#eab308" : "#22c55e";
+                    return (
+                      <div
+                        key={w.window}
+                        className="relative rounded-xl overflow-hidden px-3 py-2.5"
+                        style={{ background: "rgba(255,255,255,0.03)" }}
+                      >
+                        {/* Fill bar behind content */}
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-xl"
+                          style={{
+                            width: `${Math.min(100, w.utilization * 100)}%`,
+                            background: `linear-gradient(90deg, ${utilColor}12, ${utilColor}06)`,
+                          }}
+                        />
+                        <div className="relative flex items-center justify-between text-sm">
+                          <div className="font-semibold text-white/70">
+                            {w.window === "pre_kick" ? "Pre-kick" : w.window === "halftime" ? "Halftime" : "Q4"}
+                          </div>
+                          <div className="flex items-center gap-3 text-xs">
+                            <span className="font-bold tabular-nums text-white/60">
+                              {w.wait_minutes_band[0]}\u2013{w.wait_minutes_band[1]} min
+                            </span>
+                            <span className="font-bold tabular-nums" style={{ color: utilColor }}>
+                              {(w.utilization * 100).toFixed(0)}%
+                            </span>
+                            {w.queue?.p_wait_gt_15 != null && w.queue.p_wait_gt_15 > 0.05 && (
+                              <span className="text-[10px] text-rose-400/60">
+                                SLA&gt;15m {(w.queue.p_wait_gt_15 * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div
+                    className="rounded-xl px-3 py-3 text-xs"
+                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                  >
+                    <div className="font-semibold text-white/60">Staffing recommendation</div>
+                    <div className="mt-1 text-white/35">
+                      Target \u226490% halftime util \u2192{" "}
+                      <span className="font-bold text-emerald-400/70">
+                        {sim?.counterfactual.concessions.ops.recommended_staff_per_stand ?? "\u2014"}
+                      </span>{" "}
+                      staff/stand
                     </div>
-                    <div className="muted">
-                      {w.wait_minutes_band[0]}–{w.wait_minutes_band[1]} min{" "}
-                      <ArrowRight className="inline h-4 w-4 align-[-2px]" /> util{" "}
-                      {(w.utilization * 100).toFixed(0)}%
-                      {w.queue?.p_wait_gt_15 != null ? (
-                        <>
-                          {" "}
-                          • SLA&gt;15m {(w.queue.p_wait_gt_15 * 100).toFixed(0)}%
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-                <div className="rounded-xl border border-white/10 bg-black/5 p-4 text-xs dark:bg-white/10">
-                  <div className="font-semibold">Staffing recommendation</div>
-                  <div className="muted mt-1">
-                    Targeting ≤90% halftime utilization suggests{" "}
-                    <span className="font-semibold">
-                      {sim?.counterfactual.concessions.ops.recommended_staff_per_stand ?? "—"}
-                    </span>{" "}
-                    staff per stand.
                   </div>
                 </div>
               </div>
-            </GlassCard>
+            </motion.div>
           </div>
 
           {/* Visual Modules Section */}
@@ -1102,97 +1247,83 @@ function KpiCard({
   value,
   sub,
   footer,
+  accent = "default",
 }: {
   title: string;
   value: string;
   sub: string;
   footer: React.ReactNode;
+  accent?: "default" | "positive" | "negative" | "scarlet";
 }) {
-  return (
-    <GlassCard className="p-4">
-      <div className="muted text-xs">{title}</div>
-      <motion.div 
-        key={value}
-        initial={{ opacity: 0.5, y: 5 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mt-1 text-2xl font-semibold tracking-tight"
-      >
-        {value}
-      </motion.div>
-      <div className="muted mt-1 text-xs">{sub}</div>
-      <motion.div 
-        key={String(footer)}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.2, delay: 0.1 }}
-        className="mt-3 text-xs"
-      >
-        {footer}
-      </motion.div>
-    </GlassCard>
-  );
-}
+  const accentStyles = {
+    default: {
+      border: "border-white/[0.08]",
+      accentLine: "from-white/30 via-white/15 to-transparent",
+      valueColor: "text-white/90",
+      glow: "none",
+    },
+    positive: {
+      border: "border-emerald-500/20",
+      accentLine: "from-emerald-400 via-emerald-500/50 to-transparent",
+      valueColor: "text-emerald-400",
+      glow: "0 0 20px rgba(52,211,153,0.15)",
+    },
+    negative: {
+      border: "border-rose-500/20",
+      accentLine: "from-rose-400 via-rose-500/50 to-transparent",
+      valueColor: "text-rose-400",
+      glow: "0 0 20px rgba(251,113,133,0.15)",
+    },
+    scarlet: {
+      border: "border-[hsl(354,78%,55%)]/20",
+      accentLine: "from-[hsl(354,78%,55%)] via-[hsl(354,78%,40%)]/50 to-transparent",
+      valueColor: "text-[hsl(354,78%,55%)]",
+      glow: "0 0 20px hsl(354 78% 55% / 0.15)",
+    },
+  };
 
-function Control({
-  label,
-  value,
-  placeholder,
-  min,
-  max,
-  step,
-  format,
-  onChange,
-}: {
-  label: string;
-  value: number | undefined;
-  placeholder: number | undefined;
-  min: number;
-  max: number;
-  step: number;
-  format: (v: number | undefined) => string;
-  onChange: (v: number) => void;
-}) {
-  const raw = value ?? placeholder ?? min;
-  const v = Math.max(min, Math.min(max, raw));
+  const style = accentStyles[accent];
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <div className="font-semibold">{label}</div>
-        <div className="muted font-mono">{format(v)}</div>
+    <motion.div
+      className={cn("relative rounded-2xl border overflow-hidden", style.border)}
+      style={{
+        background: "linear-gradient(145deg, hsl(220 18% 7%) 0%, hsl(224 16% 10%) 50%, hsl(220 14% 7%) 100%)",
+        boxShadow: style.glow,
+      }}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      whileHover={{ y: -2, boxShadow: `${style.glow}, 0 12px 30px rgba(0,0,0,0.4)` }}
+    >
+      {/* Top accent line */}
+      <div className={cn("absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r", style.accentLine)} />
+
+      <div className="p-4">
+        <div className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-semibold">{title}</div>
+        <motion.div
+          key={value}
+          initial={{ opacity: 0.4, y: 6, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className={cn("mt-2 text-[28px] font-bold tabular-nums tracking-tight leading-none", style.valueColor)}
+        >
+          {value}
+        </motion.div>
+        <div className="mt-2 text-[11px] text-white/35 leading-relaxed">{sub}</div>
+        <div className="mt-3 pt-3 border-t border-white/[0.06]">
+          <motion.div
+            key={String(footer)}
+            initial={{ opacity: 0, x: -4 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.25, delay: 0.1 }}
+            className="text-xs"
+          >
+            {footer}
+          </motion.div>
+        </div>
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={v}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="range"
-      />
-    </div>
-  );
-}
-
-function Toggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="glass-strong flex items-center justify-between gap-3 rounded-xl border border-white/10 px-3 py-2 text-sm">
-      <span className="font-semibold">{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-5 w-5 accent-[hsl(var(--scarlet))]"
-      />
-    </label>
+    </motion.div>
   );
 }
 
@@ -1204,52 +1335,106 @@ function OptimizeResultCard({
   onApply: (overrides: Record<string, unknown>) => void;
 }) {
   const best = data.recommended;
+  const utilOk = best.ops_worst_utilization <= 0.9;
+  const winGood = best.delta_win_probability > 0;
+
   return (
-    <div className="glass-strong rounded-2xl border border-white/10 p-4 text-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div className="font-semibold">Recommended bundle</div>
-        <GlassButton variant="primary" onClick={() => onApply(best.overrides)}>
-          Apply
-        </GlassButton>
-      </div>
-      <div className="muted mt-1 text-xs">
-        Δ win {(best.delta_win_probability * 100).toFixed(2)}pp • ops util{" "}
-        {(best.ops_worst_utilization * 100).toFixed(0)}% • revenue{" "}
-        {best.revenue_total_usd.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 })}
-      </div>
+    <motion.div
+      className="relative rounded-2xl border overflow-hidden"
+      style={{
+        background: "linear-gradient(145deg, hsl(220 18% 7%) 0%, hsl(224 16% 10%) 50%, hsl(220 14% 7%) 100%)",
+        borderColor: winGood ? "rgba(52,211,153,0.2)" : "rgba(255,255,255,0.08)",
+      }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      {/* Accent top border */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-400 via-emerald-500/50 to-transparent" />
 
-      <div className="mt-3 grid gap-2 md:grid-cols-2 text-xs">
-        {Object.entries(best.overrides).map(([k, v]) => (
-          <div key={k} className="flex items-center justify-between rounded-xl bg-black/5 px-3 py-2 dark:bg-white/10">
-            <div className="font-semibold">{k.replaceAll("_", " ")}</div>
-            <div className="muted font-mono">{String(v)}</div>
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-bold text-white/90">Recommended Bundle</div>
+            <div className="text-[10px] text-white/30 uppercase tracking-widest mt-0.5">Optimizer result</div>
           </div>
-        ))}
-      </div>
+          <GlassButton variant="primary" onClick={() => onApply(best.overrides)}>
+            Apply
+          </GlassButton>
+        </div>
 
-      {data.alternatives?.length ? (
-        <div className="mt-4">
-          <div className="muted text-[11px] uppercase tracking-[0.16em]">Alternatives</div>
-          <div className="mt-2 space-y-2">
-            {data.alternatives.slice(0, 3).map((c, idx) => (
-              <button
-                key={idx}
-                className="w-full rounded-xl bg-black/5 px-3 py-2 text-left text-xs transition hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15"
-                onClick={() => onApply(c.overrides)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold">Alt #{idx + 1}</div>
-                  <div className="muted font-mono">{c.score.toFixed(2)}</div>
-                </div>
-                <div className="muted mt-1">
-                  Δ {(c.delta_win_probability * 100).toFixed(2)}pp • util {(c.ops_worst_utilization * 100).toFixed(0)}% •{" "}
-                  {c.revenue_total_usd.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 })}
-                </div>
-              </button>
-            ))}
+        {/* Result metrics */}
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="rounded-xl p-2.5" style={{ background: "rgba(52,211,153,0.08)" }}>
+            <div className="text-[9px] text-emerald-400/50 uppercase tracking-widest font-semibold">Win delta</div>
+            <div className="text-lg font-bold tabular-nums text-emerald-400 mt-0.5">
+              +{(best.delta_win_probability * 100).toFixed(2)}pp
+            </div>
+          </div>
+          <div className="rounded-xl p-2.5" style={{ background: utilOk ? "rgba(52,211,153,0.06)" : "rgba(251,113,133,0.06)" }}>
+            <div className={cn("text-[9px] uppercase tracking-widest font-semibold", utilOk ? "text-emerald-400/50" : "text-rose-400/50")}>Ops util</div>
+            <div className={cn("text-lg font-bold tabular-nums mt-0.5", utilOk ? "text-emerald-400" : "text-rose-400")}>
+              {(best.ops_worst_utilization * 100).toFixed(0)}%
+            </div>
+          </div>
+          <div className="rounded-xl p-2.5" style={{ background: "rgba(255,255,255,0.03)" }}>
+            <div className="text-[9px] text-white/30 uppercase tracking-widest font-semibold">Revenue</div>
+            <div className="text-lg font-bold tabular-nums text-white/80 mt-0.5">
+              {best.revenue_total_usd >= 1_000_000
+                ? `$${(best.revenue_total_usd / 1_000_000).toFixed(2)}M`
+                : `$${(best.revenue_total_usd / 1_000).toFixed(0)}K`}
+            </div>
           </div>
         </div>
-      ) : null}
-    </div>
+
+        {/* Override details */}
+        <div className="mt-3 grid gap-1.5 md:grid-cols-2 text-xs">
+          {Object.entries(best.overrides).map(([k, v]) => (
+            <div
+              key={k}
+              className="flex items-center justify-between rounded-lg px-3 py-1.5"
+              style={{ background: "rgba(255,255,255,0.04)" }}
+            >
+              <div className="font-medium text-white/50">{k.replaceAll("_", " ")}</div>
+              <div className="font-bold text-white/80 tabular-nums">{String(v)}</div>
+            </div>
+          ))}
+        </div>
+
+        {data.alternatives?.length ? (
+          <div className="mt-4 pt-3 border-t border-white/[0.06]">
+            <div className="text-[9px] text-white/25 uppercase tracking-[0.2em] font-semibold mb-2">Alternatives</div>
+            <div className="space-y-1.5">
+              {data.alternatives.slice(0, 3).map((c, idx) => (
+                <motion.button
+                  key={idx}
+                  className="w-full rounded-lg px-3 py-2 text-left text-xs transition-all"
+                  style={{ background: "rgba(255,255,255,0.03)" }}
+                  onClick={() => onApply(c.overrides)}
+                  whileHover={{ backgroundColor: "rgba(255,255,255,0.07)" }}
+                  whileTap={{ scale: 0.99 }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-white/60">Plan #{idx + 1}</div>
+                    <div className="font-mono text-[10px] text-white/30">score {c.score.toFixed(2)}</div>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-3 text-white/40">
+                    <span className="text-emerald-400/70 font-bold tabular-nums">
+                      +{(c.delta_win_probability * 100).toFixed(2)}pp
+                    </span>
+                    <span className="tabular-nums">util {(c.ops_worst_utilization * 100).toFixed(0)}%</span>
+                    <span className="tabular-nums">
+                      {c.revenue_total_usd >= 1_000_000
+                        ? `$${(c.revenue_total_usd / 1_000_000).toFixed(2)}M`
+                        : `$${(c.revenue_total_usd / 1_000).toFixed(0)}K`}
+                    </span>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </motion.div>
   );
 }

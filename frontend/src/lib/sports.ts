@@ -50,7 +50,7 @@ export const SPORT_SCOPES: SportScope[] = [
     objectiveDefault: "profit",
     isIndoor: false,
     ranges: {
-      attendance: { min: 80000, max: 105000, step: 250 },
+      attendance: { min: 85000, max: 106000, step: 250 },
       studentRatioPermille: { min: 120, max: 260, step: 1 },
       crowdEnergy: { min: 55, max: 100, step: 1 },
       seatsOpenPct: { min: 60, max: 100, step: 5 },
@@ -59,10 +59,10 @@ export const SPORT_SCOPES: SportScope[] = [
       windMph: { min: 0, max: 25, step: 1 },
     },
     defaults: {
-      attendance: 101000,
-      studentRatio: 0.19,
+      attendance: 104000,
+      studentRatio: 0.20,
       crowdEnergy: 78,
-      windMph: 10,
+      windMph: 8,
     },
     bites: [
       "Tune rivalry vs non-conf demand curves.",
@@ -85,7 +85,7 @@ export const SPORT_SCOPES: SportScope[] = [
     objectiveDefault: "mission",
     isIndoor: true,
     ranges: {
-      attendance: { min: 6000, max: 20000, step: 100 },
+      attendance: { min: 5000, max: 19000, step: 100 },
       studentRatioPermille: { min: 150, max: 420, step: 1 },
       crowdEnergy: { min: 50, max: 100, step: 1 },
       seatsOpenPct: { min: 40, max: 100, step: 5 },
@@ -94,9 +94,9 @@ export const SPORT_SCOPES: SportScope[] = [
       windMph: { min: 0, max: 12, step: 1 },
     },
     defaults: {
-      attendance: 15000,
-      studentRatio: 0.25,
-      crowdEnergy: 74,
+      attendance: 14000,
+      studentRatio: 0.22,
+      crowdEnergy: 72,
       windMph: 0,
     },
     bites: [
@@ -120,7 +120,7 @@ export const SPORT_SCOPES: SportScope[] = [
     objectiveDefault: "mission",
     isIndoor: true,
     ranges: {
-      attendance: { min: 2500, max: 8000, step: 50 },
+      attendance: { min: 1500, max: 3500, step: 25 },
       studentRatioPermille: { min: 160, max: 450, step: 1 },
       crowdEnergy: { min: 55, max: 100, step: 1 },
       seatsOpenPct: { min: 50, max: 100, step: 5 },
@@ -129,9 +129,9 @@ export const SPORT_SCOPES: SportScope[] = [
       windMph: { min: 0, max: 8, step: 1 },
     },
     defaults: {
-      attendance: 5200,
-      studentRatio: 0.3,
-      crowdEnergy: 80,
+      attendance: 3200,
+      studentRatio: 0.32,
+      crowdEnergy: 82,
       windMph: 0,
     },
     bites: [
@@ -164,9 +164,9 @@ export const SPORT_SCOPES: SportScope[] = [
       windMph: { min: 0, max: 18, step: 1 },
     },
     defaults: {
-      attendance: 4200,
-      studentRatio: 0.22,
-      crowdEnergy: 60,
+      attendance: 2000,
+      studentRatio: 0.18,
+      crowdEnergy: 55,
       windMph: 8,
     },
     bites: [

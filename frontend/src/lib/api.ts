@@ -296,3 +296,101 @@ export async function getHfaCalibration() {
   return apiFetch<HfaCalibrationReport>("/calibration/hfa");
 }
 
+// ============================================================================
+// LIVE DATA APIs — ESPN + Weather
+// ============================================================================
+
+export type DataSourceEntry = {
+  field: string;
+  source: string;
+  status: "LIVE" | "REAL/ESTIMATED" | "HISTORICAL" | "MOCK" | string;
+};
+
+export type LiveWeather = {
+  temp_f: number;
+  wind_mph: number;
+  precip_chance_pct: number;
+  conditions: string;
+  source: "LIVE" | "HISTORICAL" | "N/A" | string;
+  _api?: string;
+};
+
+export type LiveGameData = {
+  _espn_matched: boolean;
+  live_attendance?: number;
+  live_home_score?: number;
+  live_away_score?: number;
+  live_completed?: boolean;
+  live_broadcast?: string;
+  live_venue_capacity?: number;
+  live_home_rank?: number;
+  live_away_rank?: number;
+  _source?: string;
+};
+
+export type EnrichedGame = Game & {
+  live: LiveGameData;
+  weather: LiveWeather;
+  data_sources: DataSourceEntry[];
+};
+
+export type ESPNScheduleGame = {
+  espn_id: string;
+  date: string;
+  name: string;
+  short_name: string;
+  home_team: string;
+  away_team: string;
+  home_score: number | null;
+  away_score: number | null;
+  home_rank: number;
+  away_rank: number;
+  venue_name: string;
+  venue_capacity: number | null;
+  attendance: number | null;
+  completed: boolean;
+  status_text: string;
+  is_home_game: boolean;
+  broadcast: string;
+  _source: string;
+};
+
+export type ESPNRanking = {
+  rank: number;
+  previous_rank: number;
+  team_name: string;
+  team_id: string;
+  record: string;
+  points: number;
+  poll_name: string;
+};
+
+export async function getEnrichedGame(gameId: string) {
+  return apiFetch<EnrichedGame>(`/games/${encodeURIComponent(gameId)}/enriched`);
+}
+
+export async function getLiveSchedule(sport: string = "football", season?: number) {
+  const params = season ? `?season=${season}` : "";
+  return apiFetch<{ sport: string; count: number; games: ESPNScheduleGame[]; _source: string }>(
+    `/live/schedule/${encodeURIComponent(sport)}${params}`,
+  );
+}
+
+export async function getLiveRankings(sport: string = "football") {
+  return apiFetch<{ sport: string; count: number; rankings: ESPNRanking[]; _source: string }>(
+    `/live/rankings/${encodeURIComponent(sport)}`,
+  );
+}
+
+export async function getLiveWeather(gameId: string) {
+  return apiFetch<{ game_id: string; weather: LiveWeather }>(
+    `/live/weather/${encodeURIComponent(gameId)}`,
+  );
+}
+
+export async function getLiveTeamInfo(sport: string = "football") {
+  return apiFetch<{ name: string; record: string; rank: number | null; logo: string; color: string; _source: string }>(
+    `/live/team/${encodeURIComponent(sport)}`,
+  );
+}
+

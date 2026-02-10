@@ -1,13 +1,14 @@
 {
+  "_source": "Presets calibrated to Ohio Stadium (102,780 cap). Attendance ranges reflect REAL 2024 avg of 104,944. Student ratio range 0.16-0.26 reflects ESTIMATED student section (20,800 seats = ~20% at capacity).",
   "presets": [
     {
       "id": "max_atmosphere",
       "name": "Max Atmosphere",
       "description": "Maximize crowd energy and student presence for ultimate home field advantage",
-      "icon": "🔥",
+      "icon": "fire",
       "color": "#bb0000",
       "overrides": {
-        "attendance": 102780,
+        "attendance": 104944,
         "student_ratio": 0.26,
         "crowd_energy": 95,
         "stands_open_pct": 100,
@@ -19,11 +20,11 @@
       "id": "revenue_focus",
       "name": "Revenue Focus",
       "description": "Optimize concessions and premium seating for maximum revenue",
-      "icon": "💰",
+      "icon": "dollar",
       "color": "#22c55e",
       "overrides": {
-        "attendance": 98000,
-        "student_ratio": 0.18,
+        "attendance": 102000,
+        "student_ratio": 0.17,
         "crowd_energy": 70,
         "stands_open_pct": 95,
         "staff_per_stand": 10,
@@ -35,12 +36,12 @@
       "id": "balanced",
       "name": "Balanced",
       "description": "Balance atmosphere, operations, and revenue for optimal game day",
-      "icon": "⚖️",
+      "icon": "scale",
       "color": "#f59e0b",
       "overrides": {
-        "attendance": 100000,
-        "student_ratio": 0.22,
-        "crowd_energy": 80,
+        "attendance": 103000,
+        "student_ratio": 0.20,
+        "crowd_energy": 78,
         "stands_open_pct": 90,
         "staff_per_stand": 7,
         "promotion_type": "none"
@@ -50,11 +51,11 @@
       "id": "conservative",
       "name": "Conservative",
       "description": "Minimize operational risk with comfortable staffing levels",
-      "icon": "🛡️",
+      "icon": "shield",
       "color": "#6b7280",
       "overrides": {
-        "attendance": 95000,
-        "student_ratio": 0.20,
+        "attendance": 100000,
+        "student_ratio": 0.19,
         "crowd_energy": 65,
         "stands_open_pct": 100,
         "staff_per_stand": 10,
@@ -66,12 +67,12 @@
     {
       "id": "student_rush",
       "name": "Student Rush",
-      "description": "Pack the student section for maximum noise",
-      "icon": "🎓",
+      "description": "Pack the student section — 20,800 seats at full show rate plus standing room",
+      "icon": "graduation",
       "color": "#bb0000",
       "overrides": {
-        "attendance": 102780,
-        "student_ratio": 0.30,
+        "attendance": 104944,
+        "student_ratio": 0.25,
         "crowd_energy": 100,
         "stands_open_pct": 85,
         "staff_per_stand": 6,
@@ -81,12 +82,12 @@
     {
       "id": "ops_safe",
       "name": "Ops Safe",
-      "description": "Ensure smooth operations with no queue overloads",
-      "icon": "✅",
+      "description": "Ensure smooth operations with no queue overloads — all stands open, max staff",
+      "icon": "check",
       "color": "#22c55e",
       "overrides": {
-        "attendance": 90000,
-        "student_ratio": 0.20,
+        "attendance": 98000,
+        "student_ratio": 0.19,
         "crowd_energy": 70,
         "stands_open_pct": 100,
         "staff_per_stand": 12,
@@ -96,4 +97,3 @@
     }
   ]
 }
-

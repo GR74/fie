@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.mock_model import HfaInputs, engine_assumptions_snapshot, predict_hfa, predict_loudness_db, simulate_concessions
 from src.calibration import build_hfa_calibration
+from src.espn_api import get_espn_schedule, get_espn_rankings, get_espn_team_info, enrich_game_with_espn
+from src.weather_api import get_game_weather
 from src.schemas import (
     CalibrationResponse,
     GameDetailResponse,
@@ -122,6 +124,9 @@ def simulate_game(game_id: str, req: SimulateRequest) -> GameSimulateResponse:
             rivalry_flag=bool(game.rivalry_flag),
             kickoff_time_local=str(s["kickoff_time_local"]),
             crowd_energy=int(s["crowd_energy"]),
+            student_ratio=float(s["student_ratio"]),
+            is_indoor=is_indoor,
+            weather_temp_f=int(s["weather_temp_f"]),
         )
         concessions = simulate_concessions(
             attendance=int(s["attendance"]),
@@ -295,22 +300,136 @@ def monte_carlo(game_id: str, req: SimulateRequest) -> dict:
     game = get_game(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    
+
+    ov = req.overrides.model_dump(exclude_none=True)
+    effective_venue_id = ov.pop("venue_id", None) or game.venue_id
+    venue = get_venue(effective_venue_id)
+    defaults = venue.get("concessions", {})
+    crowd_defaults = venue.get("crowd", {})
+    effective_cap = int(venue.get("capacity", game.venue_capacity))
+
     overrides = {
-        "attendance": req.attendance if req.attendance is not None else game.baseline_attendance,
-        "student_ratio": req.student_ratio if req.student_ratio is not None else game.baseline_student_ratio,
-        "crowd_energy": req.crowd_energy if req.crowd_energy is not None else 78,
-        "stands_open_pct": req.stands_open_pct if req.stands_open_pct is not None else 85,
-        "staff_per_stand": req.staff_per_stand if req.staff_per_stand is not None else 6,
-        "express_lanes": req.express_lanes if req.express_lanes is not None else False,
+        "attendance": ov.get("attendance", game.baseline_attendance),
+        "student_ratio": ov.get("student_ratio", game.baseline_student_ratio),
+        "crowd_energy": ov.get("crowd_energy", int(crowd_defaults.get("default_crowd_energy", 70))),
+        "stands_open_pct": ov.get("stands_open_pct", int(defaults.get("default_stands_open_pct", 85))),
+        "staff_per_stand": ov.get("staff_per_stand", int(defaults.get("default_staff_per_stand", 6))),
+        "express_lanes": ov.get("express_lanes", False),
+        "early_arrival_promo": ov.get("early_arrival_promo", False),
+        "kickoff_time_local": ov.get("kickoff_time_local", game.kickoff_time_local),
+        "weather_wind_mph": ov.get("weather_wind_mph", game.baseline_weather_wind_mph),
+        "weather_temp_f": ov.get("weather_temp_f", game.baseline_weather_temp_f),
+        "promotion_type": ov.get("promotion_type", game.baseline_promotion_type),
+        "seats_open_pct": ov.get("seats_open_pct", 100),
+        "venue_capacity": effective_cap,
     }
-    
+
     result = run_monte_carlo(
-        game_id=game_id,
+        game=game,
+        venue=venue,
         base_overrides=overrides,
         n_simulations=200,  # Reduced for faster response
         variation_pct=0.08,
     )
-    
+
     return {"game_id": game_id, **result}
+
+
+# ============================================================================
+# LIVE DATA ENDPOINTS — ESPN + Weather
+# ============================================================================
+
+@app.get("/live/schedule/{sport}")
+def live_schedule(sport: str = "football", season: int | None = None) -> dict:
+    """Fetch live schedule from ESPN for a given sport."""
+    games = get_espn_schedule(sport, season)
+    return {
+        "sport": sport,
+        "count": len(games),
+        "games": games,
+        "_source": "ESPN public API (site.api.espn.com)" if games else "unavailable",
+    }
+
+
+@app.get("/live/rankings/{sport}")
+def live_rankings(sport: str = "football") -> dict:
+    """Fetch current AP/Coaches poll rankings from ESPN."""
+    rankings = get_espn_rankings(sport)
+    return {
+        "sport": sport,
+        "count": len(rankings),
+        "rankings": rankings,
+        "_source": "ESPN public API" if rankings else "unavailable",
+    }
+
+
+@app.get("/live/team/{sport}")
+def live_team(sport: str = "football") -> dict:
+    """Fetch Ohio State team info from ESPN."""
+    info = get_espn_team_info(sport)
+    if not info:
+        return {"error": "Could not fetch team info", "_source": "unavailable"}
+    return info
+
+
+@app.get("/live/weather/{game_id}")
+def live_weather(game_id: str) -> dict:
+    """Fetch weather forecast/normals for a specific game."""
+    game = get_game(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    venue = get_venue(game.venue_id)
+    is_indoor = bool(venue.get("is_indoor", False))
+
+    weather = get_game_weather(
+        game_date=str(game.date),
+        kickoff_time=game.kickoff_time_local,
+        is_indoor=is_indoor,
+    )
+    return {
+        "game_id": game_id,
+        "date": str(game.date),
+        "kickoff_time": game.kickoff_time_local,
+        "venue": game.venue_name,
+        "is_indoor": is_indoor,
+        "weather": weather,
+    }
+
+
+@app.get("/games/{game_id}/enriched")
+def game_enriched(game_id: str) -> dict:
+    """
+    Return game detail enriched with live ESPN data (attendance, scores, rankings)
+    and weather forecast. Falls back gracefully if APIs are unavailable.
+    """
+    game = get_game(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    game_dict = game.model_dump()
+    game_dict["date"] = str(game.date)
+
+    # Enrich with ESPN live data
+    espn_data = enrich_game_with_espn(game_dict, game.sport)
+    game_dict["live"] = espn_data if espn_data else {"_espn_matched": False, "_source": "no ESPN match"}
+
+    # Enrich with weather
+    venue = get_venue(game.venue_id)
+    is_indoor = bool(venue.get("is_indoor", False))
+    weather = get_game_weather(str(game.date), game.kickoff_time_local, is_indoor)
+    game_dict["weather"] = weather
+
+    # Data sources summary
+    sources = []
+    sources.append({"field": "schedule", "source": "static (games.json)", "status": "REAL/ESTIMATED"})
+    if espn_data.get("_espn_matched"):
+        sources.append({"field": "attendance/rankings", "source": "ESPN public API", "status": "LIVE"})
+    if weather.get("source") == "LIVE":
+        sources.append({"field": "weather", "source": "Open-Meteo forecast API", "status": "LIVE"})
+    elif weather.get("source") == "HISTORICAL":
+        sources.append({"field": "weather", "source": "NOAA/NWS 1991-2020 normals", "status": "HISTORICAL"})
+    game_dict["data_sources"] = sources
+
+    return game_dict
 

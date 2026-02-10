@@ -1,7 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
+/* ------------------------------------------------------------------ */
+/*  Types & Props                                                      */
+/* ------------------------------------------------------------------ */
 interface StadiumFillVizProps {
   attendance: number;
   capacity: number;
@@ -12,473 +16,726 @@ interface StadiumFillVizProps {
   className?: string;
 }
 
+interface Section {
+  id: string;
+  path: string;
+  fill: number;
+  isStudent: boolean;
+  tier: string;
+}
+
 type SportKey = "football" | "basketball" | "volleyball" | "baseball" | "soccer";
 
-type SportLayout = {
-  icon: string;
-  label: string;
-  hue: number;
-  centerX: number;
-  centerY: number;
-  innerRadius: number;
-  outerRadius: number;
-  yScale: number;
-  startDeg: number;
-  endDeg: number;
-  sections: number;
-  phase: number;
-  studentRanges: Array<[number, number]>;
-};
-
-type FootballSection = {
-  index: number;
-  fill: number;
-  d: string;
-  color: string;
-  markerX: number;
-  markerY: number;
-};
-
-const SPORT_LAYOUTS: Record<SportKey, SportLayout> = {
-  football: {
-    icon: "🏈",
-    label: "Football Bowl",
-    hue: 220,
-    centerX: 130,
-    centerY: 102,
-    innerRadius: 68,
-    outerRadius: 104,
-    yScale: 0.7,
-    startDeg: 202,
-    endDeg: 338,
-    sections: 18,
-    phase: 0.15,
-    studentRanges: [[7, 10]],
-  },
-  basketball: {
-    icon: "🏀",
-    label: "Arena Bowl",
-    hue: 28,
-    centerX: 130,
-    centerY: 96,
-    innerRadius: 56,
-    outerRadius: 92,
-    yScale: 0.75,
-    startDeg: 0,
-    endDeg: 360,
-    sections: 16,
-    phase: 0.8,
-    studentRanges: [[3, 4], [11, 12]],
-  },
-  volleyball: {
-    icon: "🏐",
-    label: "Compact Arena",
-    hue: 186,
-    centerX: 130,
-    centerY: 96,
-    innerRadius: 52,
-    outerRadius: 86,
-    yScale: 0.74,
-    startDeg: 0,
-    endDeg: 360,
-    sections: 14,
-    phase: 1.2,
-    studentRanges: [[3, 5]],
-  },
-  baseball: {
-    icon: "⚾",
-    label: "Outfield Bowl",
-    hue: 122,
-    centerX: 130,
-    centerY: 118,
-    innerRadius: 66,
-    outerRadius: 104,
-    yScale: 0.84,
-    startDeg: 208,
-    endDeg: 332,
-    sections: 14,
-    phase: 0.35,
-    studentRanges: [[1, 3]],
-  },
-  soccer: {
-    icon: "⚽",
-    label: "Pitch Arena",
-    hue: 206,
-    centerX: 130,
-    centerY: 96,
-    innerRadius: 60,
-    outerRadius: 96,
-    yScale: 0.73,
-    startDeg: 0,
-    endDeg: 360,
-    sections: 18,
-    phase: 0.6,
-    studentRanges: [[0, 2]],
-  },
-};
-
-function clamp(x: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, x));
+/* ------------------------------------------------------------------ */
+/*  Geometry helpers                                                    */
+/* ------------------------------------------------------------------ */
+function clamp(x: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, x));
+}
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
 }
 
-function toRadians(deg: number) {
-  return (deg * Math.PI) / 180;
+/** Convert polar angle (0° = top/north, clockwise) to cartesian. */
+function polar(cx: number, cy: number, r: number, deg: number) {
+  const rad = ((deg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
 
-function resolveSport(sport?: string): SportKey {
-  if (sport === "basketball") return "basketball";
-  if (sport === "volleyball") return "volleyball";
-  if (sport === "baseball") return "baseball";
-  if (sport === "soccer") return "soccer";
+/** SVG arc-sector path between two radii and two angles. */
+function sectorPath(
+  cx: number,
+  cy: number,
+  ri: number,
+  ro: number,
+  startDeg: number,
+  endDeg: number,
+) {
+  const oS = polar(cx, cy, ro, startDeg);
+  const oE = polar(cx, cy, ro, endDeg);
+  const iE = polar(cx, cy, ri, endDeg);
+  const iS = polar(cx, cy, ri, startDeg);
+  const la = endDeg - startDeg > 180 ? 1 : 0;
+  return [
+    `M ${oS.x.toFixed(2)} ${oS.y.toFixed(2)}`,
+    `A ${ro} ${ro} 0 ${la} 1 ${oE.x.toFixed(2)} ${oE.y.toFixed(2)}`,
+    `L ${iE.x.toFixed(2)} ${iE.y.toFixed(2)}`,
+    `A ${ri} ${ri} 0 ${la} 0 ${iS.x.toFixed(2)} ${iS.y.toFixed(2)}`,
+    "Z",
+  ].join(" ");
+}
+
+/** Deterministic noise for per-section fill variation. */
+function sRand(seed: number) {
+  const x = Math.sin(seed * 12345.6789) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function resolveSport(s?: string): SportKey {
+  if (s === "basketball") return "basketball";
+  if (s === "volleyball") return "volleyball";
+  if (s === "baseball") return "baseball";
+  if (s === "soccer") return "soccer";
   return "football";
 }
 
-function normalizeArc(startDeg: number, endDeg: number) {
-  let end = endDeg;
-  while (end <= startDeg) end += 360;
-  return { startDeg, endDeg: end, span: end - startDeg };
+/* ------------------------------------------------------------------ */
+/*  Section color system                                               */
+/* ------------------------------------------------------------------ */
+function sectionColor(fill: number, isStudent: boolean, tier: string): string {
+  if (fill < 0.05) return "hsl(220 15% 7%)";
+  if (isStudent) {
+    return `hsl(354 ${lerp(45, 78, fill)}% ${lerp(12, 46, fill)}%)`;
+  }
+  if (tier === "club" || tier === "premium") {
+    return `hsl(42 ${lerp(18, 55, fill)}% ${lerp(11, 38, fill)}%)`;
+  }
+  return `hsl(215 ${lerp(12, 32, fill)}% ${lerp(9, 38, fill)}%)`;
 }
 
-function isIndexInRanges(index: number, ranges: Array<[number, number]>) {
-  return ranges.some(([start, end]) => index >= start && index <= end);
+function sectionStroke(fill: number, isStudent: boolean): string {
+  if (isStudent && fill > 0.5) return "hsl(354 78% 55% / 0.4)";
+  return "rgba(255,255,255,0.05)";
 }
 
-function getSectionFill(index: number, sections: number, baseFill: number, phase: number) {
-  const t = index / Math.max(sections - 1, 1);
-  const wave = Math.sin(t * Math.PI * 2 + phase) * 0.08;
-  const centerBoost = (1 - Math.abs(t - 0.5) * 2) * 0.04;
-  return clamp(baseFill + wave + centerBoost - 0.03, 0, 1);
+function sectionFilter(fill: number, isStudent: boolean): string {
+  if (fill < 0.65) return "none";
+  if (isStudent)
+    return `drop-shadow(0 0 ${3 + fill * 5}px hsl(354 78% 50% / ${fill * 0.45}))`;
+  return "none";
 }
 
-function getSeatColor({
-  sport,
-  fill,
-  isStudent,
-  showStudentSplit,
+/* ------------------------------------------------------------------ */
+/*  Animated counter                                                   */
+/* ------------------------------------------------------------------ */
+function AnimNum({
+  value,
+  fmt,
 }: {
-  sport: SportLayout;
-  fill: number;
-  isStudent: boolean;
-  showStudentSplit: boolean;
+  value: number;
+  fmt: (v: number) => string;
 }) {
-  if (fill <= 0.04) return "hsl(228 18% 14%)";
-  if (isStudent && showStudentSplit) {
-    const light = 28 + fill * 24;
-    return `hsl(354 82% ${light.toFixed(1)}%)`;
-  }
-  const sat = 22 + fill * 34;
-  const light = 18 + fill * 38;
-  return `hsl(${sport.hue} ${sat.toFixed(1)}% ${light.toFixed(1)}%)`;
+  const [display, setDisplay] = useState(value);
+  const prev = useRef(value);
+  useEffect(() => {
+    const from = prev.current;
+    const to = value;
+    const dur = 500;
+    const t0 = performance.now();
+    let raf: number;
+    function tick(now: number) {
+      const p = clamp((now - t0) / dur, 0, 1);
+      const e = 1 - (1 - p) ** 3;
+      setDisplay(from + (to - from) * e);
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else prev.current = to;
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{fmt(display)}</>;
 }
 
-function pointAt(layout: SportLayout, radius: number, angleDeg: number) {
-  const r = toRadians(angleDeg);
-  return {
-    x: layout.centerX + Math.cos(r) * radius,
-    y: layout.centerY + Math.sin(r) * radius * layout.yScale,
-  };
+/* ------------------------------------------------------------------ */
+/*  Pulse rings (crowd energy emanation)                               */
+/* ------------------------------------------------------------------ */
+function PulseRings({ cx, cy, intensity }: { cx: number; cy: number; intensity: number }) {
+  if (intensity < 0.45) return null;
+  const a = clamp((intensity - 0.45) / 0.55, 0, 1);
+  return (
+    <g opacity={a * 0.55}>
+      {[0, 1, 2].map((i) => (
+        <circle key={i} cx={cx} cy={cy} r={180 + i * 15} fill="none"
+          stroke={`hsl(354 78% 50% / ${0.14 - i * 0.04})`} strokeWidth="1">
+          <animate attributeName="r"
+            values={`${180 + i * 15};${190 + i * 15};${180 + i * 15}`}
+            dur={`${2.4 + i * 0.4}s`} repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.6;0.15;0.6"
+            dur={`${2.4 + i * 0.4}s`} repeatCount="indefinite" />
+        </circle>
+      ))}
+    </g>
+  );
 }
 
-function getSections(layout: SportLayout, fillRatio: number, showStudentSplit: boolean) {
-  const arc = normalizeArc(layout.startDeg, layout.endDeg);
-  const step = arc.span / layout.sections;
-
-  return Array.from({ length: layout.sections }, (_, index) => {
-    const a0 = arc.startDeg + index * step;
-    const a1 = a0 + step * 0.94;
-
-    const innerStart = pointAt(layout, layout.innerRadius, a0);
-    const innerEnd = pointAt(layout, layout.innerRadius, a1);
-    const outerEnd = pointAt(layout, layout.outerRadius, a1);
-    const outerStart = pointAt(layout, layout.outerRadius, a0);
-
-    const fill = getSectionFill(index, layout.sections, fillRatio, layout.phase);
-    const isStudent = isIndexInRanges(index, layout.studentRanges);
-
-    return {
-      index,
-      fill,
-      isStudent,
-      d: `M ${innerStart.x.toFixed(2)} ${innerStart.y.toFixed(2)} L ${innerEnd.x.toFixed(2)} ${innerEnd.y.toFixed(2)} L ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)} L ${outerStart.x.toFixed(2)} ${outerStart.y.toFixed(2)} Z`,
-      color: getSeatColor({ sport: layout, fill, isStudent, showStudentSplit }),
-    };
-  });
-}
-
-function getFootballSections(attendance: number, capacity: number, showStudentSplit: boolean): FootballSection[] {
-  const numSections = 24;
-  const safeCapacity = Math.max(1, capacity);
-  const seatsPerSection = Math.ceil(safeCapacity / numSections);
-  const centerX = 130;
-  const centerY = 96;
-  const innerRadius = 60;
-  const outerRadius = 90;
-  const yScale = 0.6;
-
-  const sections: FootballSection[] = [];
-
-  for (let index = 0; index < numSections; index += 1) {
-    // Keep open horseshoe ends like the original football view.
-    if (index <= 4 || index >= 20) continue;
-
-    const angle = (index / numSections) * Math.PI + Math.PI / 2;
-    const startAngle = angle - Math.PI / 26;
-    const endAngle = angle + Math.PI / 26;
-
-    const sectionStart = index * seatsPerSection;
-    const sectionEnd = Math.min((index + 1) * seatsPerSection, safeCapacity);
-    const sectionCapacity = Math.max(1, sectionEnd - sectionStart);
-    const filledInSection = Math.min(sectionCapacity, Math.max(0, attendance - sectionStart));
-    const fill = clamp(filledInSection / sectionCapacity, 0, 1);
-    const isStudentSection = index >= 10 && index <= 14;
-
-    const x1 = centerX + Math.cos(startAngle) * innerRadius;
-    const y1 = centerY + Math.sin(startAngle) * innerRadius * yScale;
-    const x2 = centerX + Math.cos(endAngle) * innerRadius;
-    const y2 = centerY + Math.sin(endAngle) * innerRadius * yScale;
-    const x3 = centerX + Math.cos(endAngle) * outerRadius;
-    const y3 = centerY + Math.sin(endAngle) * outerRadius * yScale;
-    const x4 = centerX + Math.cos(startAngle) * outerRadius;
-    const y4 = centerY + Math.sin(startAngle) * outerRadius * yScale;
-
-    const color = fill > 0
-      ? (
-          isStudentSection && showStudentSplit
-            ? `hsl(354 78% ${(35 + fill * 25).toFixed(1)}%)`
-            : `hsl(220 ${(10 + fill * 5).toFixed(1)}% ${(25 + fill * 45).toFixed(1)}%)`
-        )
-      : "hsl(228 18% 14%)";
-
-    sections.push({
-      index,
-      fill,
-      d: `M ${x1.toFixed(2)} ${y1.toFixed(2)} L ${x2.toFixed(2)} ${y2.toFixed(2)} L ${x3.toFixed(2)} ${y3.toFixed(2)} L ${x4.toFixed(2)} ${y4.toFixed(2)} Z`,
-      color,
-      markerX: (x1 + x2 + x3 + x4) / 4,
-      markerY: (y1 + y2 + y3 + y4) / 4,
+/* ================================================================== */
+/*  FOOTBALL HORSESHOE                                                 */
+/* ================================================================== */
+function useFootballSections(fillRatio: number, showStudent: boolean): Section[] {
+  return useMemo(() => {
+    const cx = 200, cy = 200;
+    const out: Section[] = [];
+    const tiers = [
+      { name: "lower", ri: 88, ro: 118, mod: 1.0, n: 22, s: 32, e: 328 },
+      { name: "club", ri: 121, ro: 136, mod: 0.96, n: 18, s: 40, e: 320 },
+      { name: "upper", ri: 139, ro: 168, mod: 0.88, n: 20, s: 46, e: 314 },
+    ];
+    tiers.forEach((t) => {
+      const span = (t.e - t.s) / t.n;
+      const gap = span * 0.055;
+      for (let i = 0; i < t.n; i++) {
+        const a0 = t.s + i * span + gap;
+        const a1 = t.s + (i + 1) * span - gap;
+        const mid = (a0 + a1) / 2;
+        const isStudent = showStudent && t.name === "lower" && (mid < 68 || mid > 292);
+        const f = clamp(fillRatio * t.mod + sRand(i * 7 + t.name.charCodeAt(0)) * 0.08 - 0.04, 0, 1);
+        out.push({
+          id: `${t.name}-${i}`,
+          path: sectorPath(cx, cy, t.ri, t.ro, a0, a1),
+          fill: f,
+          isStudent,
+          tier: t.name,
+        });
+      }
     });
-  }
-
-  return sections;
+    return out;
+  }, [fillRatio, showStudent]);
 }
 
-function SportField({ sport }: { sport: SportKey }) {
-  if (sport === "football") {
-    return (
-      <>
-        <ellipse cx="130" cy="96" rx="55" ry="35" fill="#1a4d1a" stroke="#2d6b2d" strokeWidth="2" />
-        {Array.from({ length: 5 }).map((_, index) => (
-          <line
-            key={index}
-            x1={90 + index * 20}
-            y1="71"
-            x2={90 + index * 20}
-            y2="121"
-            stroke="rgba(255,255,255,0.4)"
-            strokeWidth="0.8"
-          />
-        ))}
-        <circle cx="130" cy="96" r="8" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="0.8" />
-        <path d="M 75 76 Q 75 96 75 116 L 85 111 L 85 81 Z" fill="hsl(var(--scarlet))" opacity="0.72" />
-        <path d="M 185 76 Q 185 96 185 116 L 175 111 L 175 81 Z" fill="rgba(255,255,255,0.4)" />
-        <text x="130" y="100" textAnchor="middle" fontSize="12" fontWeight="700" fill="rgba(255,255,255,0.3)">OSU</text>
-      </>
-    );
-  }
-
-  if (sport === "basketball") {
-    return (
-      <>
-        <rect x="76" y="55" width="108" height="82" rx="10" fill="#c6844c" stroke="#8f5d37" strokeWidth="2" />
-        <line x1="130" y1="55" x2="130" y2="137" stroke="rgba(255,255,255,0.65)" strokeWidth="1.2" />
-        <circle cx="130" cy="96" r="14" fill="none" stroke="rgba(255,255,255,0.65)" strokeWidth="1.2" />
-        <rect x="76" y="74" width="16" height="44" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1" />
-        <rect x="168" y="74" width="16" height="44" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1" />
-      </>
-    );
-  }
-
-  if (sport === "volleyball") {
-    return (
-      <>
-        <rect x="74" y="58" width="112" height="76" rx="6" fill="#b77747" stroke="#8f5d37" strokeWidth="2" />
-        <rect x="74" y="58" width="112" height="76" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1" />
-        <line x1="130" y1="58" x2="130" y2="134" stroke="rgba(255,255,255,0.75)" strokeWidth="1.4" />
-        <line x1="130" y1="58" x2="130" y2="134" stroke="rgba(255,255,255,0.35)" strokeWidth="4" strokeDasharray="2 3" />
-      </>
-    );
-  }
-
-  if (sport === "baseball") {
-    return (
-      <>
-        <polygon points="130,70 154,94 130,118 106,94" fill="#cfa777" stroke="#b78b59" strokeWidth="1.8" />
-        <line x1="130" y1="70" x2="130" y2="46" stroke="#f4e1be" strokeWidth="1.2" opacity="0.7" />
-        <line x1="106" y1="94" x2="130" y2="70" stroke="#f4e1be" strokeWidth="1.1" opacity="0.6" />
-        <line x1="154" y1="94" x2="130" y2="70" stroke="#f4e1be" strokeWidth="1.1" opacity="0.6" />
-        <circle cx="130" cy="96" r="4" fill="#f4e1be" />
-        <circle cx="130" cy="70" r="3" fill="#f4e1be" />
-        <circle cx="154" cy="94" r="3" fill="#f4e1be" />
-        <circle cx="106" cy="94" r="3" fill="#f4e1be" />
-        <text x="130" y="134" textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.5)" style={{ letterSpacing: "0.05em", textTransform: "uppercase" }}>
-          Infield Focus
-        </text>
-      </>
-    );
-  }
-
-  if (sport === "soccer") {
-    return (
-      <>
-        <rect x="66" y="56" width="128" height="80" rx="8" fill="#2d7f42" stroke="#3f9f57" strokeWidth="2" />
-        <line x1="130" y1="56" x2="130" y2="136" stroke="rgba(255,255,255,0.68)" strokeWidth="1.2" />
-        <circle cx="130" cy="96" r="15" fill="none" stroke="rgba(255,255,255,0.68)" strokeWidth="1.2" />
-        <rect x="66" y="76" width="18" height="40" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1" />
-        <rect x="176" y="76" width="18" height="40" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1" />
-      </>
-    );
-  }
-
-  return null;
+function FootballField() {
+  const cx = 200, cy = 200, fw = 56, fh = 96;
+  return (
+    <g>
+      <rect x={cx - fw / 2} y={cy - fh / 2} width={fw} height={fh} rx="3" fill="#17522a" />
+      <rect x={cx - fw / 2 + 2} y={cy - fh / 2 + 2} width={fw - 4} height={fh - 4} rx="2" fill="#1d6430" />
+      {/* Yard lines */}
+      {Array.from({ length: 11 }, (_, i) => {
+        const y = cy - fh / 2 + 5 + (i * (fh - 10)) / 10;
+        return (
+          <line key={i} x1={cx - fw / 2 + 5} y1={y} x2={cx + fw / 2 - 5} y2={y}
+            stroke="rgba(255,255,255,0.2)" strokeWidth="0.5" />
+        );
+      })}
+      {/* 50 */}
+      <line x1={cx - fw / 2 + 5} y1={cy} x2={cx + fw / 2 - 5} y2={cy}
+        stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" />
+      {/* End zones */}
+      <rect x={cx - fw / 2 + 2} y={cy - fh / 2 + 2} width={fw - 4} height={9} rx="1"
+        fill="hsl(354 65% 25%)" opacity="0.7" />
+      <rect x={cx - fw / 2 + 2} y={cy + fh / 2 - 11} width={fw - 4} height={9} rx="1"
+        fill="hsl(0 0% 28%)" opacity="0.3" />
+      {/* Center logo */}
+      <circle cx={cx} cy={cy} r="5.5" fill="hsl(354 70% 30%)" opacity="0.35" />
+      <circle cx={cx} cy={cy} r="3" fill="hsl(354 70% 42%)" opacity="0.25" />
+    </g>
+  );
 }
 
+/* ================================================================== */
+/*  BASKETBALL / VOLLEYBALL ARENA (full 360° enclosed)                 */
+/* ================================================================== */
+function useArenaSections(fillRatio: number, showStudent: boolean): Section[] {
+  return useMemo(() => {
+    const cx = 200, cy = 200;
+    const out: Section[] = [];
+    const tiers = [
+      { name: "lower", ri: 78, ro: 114, mod: 1.0, n: 24 },
+      { name: "upper", ri: 117, ro: 158, mod: 0.9, n: 28 },
+    ];
+    tiers.forEach((t) => {
+      const span = 360 / t.n;
+      const gap = span * 0.05;
+      for (let i = 0; i < t.n; i++) {
+        const a0 = i * span + gap;
+        const a1 = (i + 1) * span - gap;
+        const isStudent = showStudent && t.name === "lower" && i >= 10 && i <= 16;
+        const f = clamp(fillRatio * t.mod + sRand(i * 11 + 50) * 0.06 - 0.03, 0, 1);
+        out.push({
+          id: `${t.name}-${i}`,
+          path: sectorPath(cx, cy, t.ri, t.ro, a0, a1),
+          fill: f,
+          isStudent,
+          tier: t.name,
+        });
+      }
+    });
+    return out;
+  }, [fillRatio, showStudent]);
+}
+
+function BasketballCourt() {
+  const cx = 200, cy = 200, cw = 62, ch = 34;
+  return (
+    <g>
+      <rect x={cx - cw / 2} y={cy - ch / 2} width={cw} height={ch} rx="2" fill="#b07040" />
+      <rect x={cx - cw / 2 + 1.5} y={cy - ch / 2 + 1.5} width={cw - 3} height={ch - 3} rx="1" fill="#c48858" />
+      <line x1={cx} y1={cy - ch / 2 + 2} x2={cx} y2={cy + ch / 2 - 2}
+        stroke="rgba(255,255,255,0.4)" strokeWidth="0.7" />
+      <circle cx={cx} cy={cy} r="7" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="0.6" />
+      <circle cx={cx} cy={cy} r="1.3" fill="hsl(354 70% 40%)" opacity="0.5" />
+      <rect x={cx - cw / 2 + 2} y={cy - 8} width="11" height="16" fill="none"
+        stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+      <rect x={cx + cw / 2 - 13} y={cy - 8} width="11" height="16" fill="none"
+        stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+    </g>
+  );
+}
+
+function VolleyballCourt() {
+  const cx = 200, cy = 200, cw = 52, ch = 28;
+  return (
+    <g>
+      <rect x={cx - cw / 2} y={cy - ch / 2} width={cw} height={ch} rx="2" fill="#9a6035" />
+      <rect x={cx - cw / 2 + 1.5} y={cy - ch / 2 + 1.5} width={cw - 3} height={ch - 3} rx="1" fill="#b57848" />
+      <line x1={cx - cw / 2 + 2} y1={cy} x2={cx + cw / 2 - 2} y2={cy}
+        stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" />
+      <rect x={cx - cw / 2 + 4} y={cy - ch / 2 + 3} width={cw - 8} height={ch - 6}
+        fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+      <line x1={cx - cw / 2 + 4} y1={cy - 7} x2={cx + cw / 2 - 4} y2={cy - 7}
+        stroke="rgba(255,255,255,0.22)" strokeWidth="0.5" />
+      <line x1={cx - cw / 2 + 4} y1={cy + 7} x2={cx + cw / 2 - 4} y2={cy + 7}
+        stroke="rgba(255,255,255,0.22)" strokeWidth="0.5" />
+    </g>
+  );
+}
+
+/* ================================================================== */
+/*  BASEBALL STADIUM (fan-shaped)                                      */
+/* ================================================================== */
+function useBaseballSections(fillRatio: number, showStudent: boolean): Section[] {
+  return useMemo(() => {
+    const cx = 200, cy = 240;
+    const out: Section[] = [];
+    const tiers: Array<{
+      name: string; ri: number; ro: number; mod: number; n: number; s: number; e: number;
+    }> = [
+      { name: "lower", ri: 72, ro: 108, mod: 1.0, n: 16, s: 110, e: 250 },
+      { name: "upper", ri: 111, ro: 148, mod: 0.86, n: 14, s: 118, e: 242 },
+      { name: "bleachers-r", ri: 111, ro: 140, mod: 0.75, n: 4, s: 250, e: 290 },
+      { name: "bleachers-l", ri: 111, ro: 140, mod: 0.75, n: 4, s: 70, e: 110 },
+    ];
+    tiers.forEach((t) => {
+      const arcSpan = t.e - t.s;
+      const span = arcSpan / t.n;
+      const gap = span * 0.06;
+      for (let i = 0; i < t.n; i++) {
+        const a0 = t.s + i * span + gap;
+        const a1 = t.s + (i + 1) * span - gap;
+        const isStudent = showStudent && t.name === "lower" && i >= 5 && i <= 10;
+        const f = clamp(fillRatio * t.mod + sRand(i * 13 + t.s) * 0.08 - 0.04, 0, 1);
+        out.push({
+          id: `${t.name}-${i}`,
+          path: sectorPath(cx, cy, t.ri, t.ro, a0, a1),
+          fill: f,
+          isStudent,
+          tier: t.name,
+        });
+      }
+    });
+    return out;
+  }, [fillRatio, showStudent]);
+}
+
+function BaseballDiamond() {
+  const cx = 200, cy = 240;
+  return (
+    <g>
+      {/* Outfield grass */}
+      <path
+        d={`M ${cx} ${cy} L ${cx - 56} ${cy - 56} A 80 80 0 0 1 ${cx + 56} ${cy - 56} Z`}
+        fill="#1b5e28"
+      />
+      <path
+        d={`M ${cx} ${cy} L ${cx - 50} ${cy - 50} A 72 72 0 0 1 ${cx + 50} ${cy - 50} Z`}
+        fill="#228833"
+      />
+      {/* Infield */}
+      <polygon
+        points={`${cx},${cy} ${cx - 22},${cy - 22} ${cx},${cy - 44} ${cx + 22},${cy - 22}`}
+        fill="#c09a60"
+      />
+      <polygon
+        points={`${cx},${cy - 1} ${cx - 20},${cy - 21} ${cx},${cy - 42} ${cx + 20},${cy - 21}`}
+        fill="#cca870"
+      />
+      {/* Bases */}
+      {[
+        [cx, cy - 1],
+        [cx - 22, cy - 22],
+        [cx, cy - 44],
+        [cx + 22, cy - 22],
+      ].map(([bx, by], i) => (
+        <rect key={i} x={bx - 1.3} y={by - 1.3} width="2.6" height="2.6" fill="white"
+          transform={`rotate(45 ${bx} ${by})`} />
+      ))}
+      {/* Foul lines */}
+      <line x1={cx} y1={cy} x2={cx - 56} y2={cy - 56}
+        stroke="rgba(255,255,255,0.35)" strokeWidth="0.6" />
+      <line x1={cx} y1={cy} x2={cx + 56} y2={cy - 56}
+        stroke="rgba(255,255,255,0.35)" strokeWidth="0.6" />
+    </g>
+  );
+}
+
+/* ================================================================== */
+/*  SOCCER STADIUM (rectangular four-sided)                            */
+/* ================================================================== */
+function useSoccerSections(fillRatio: number, showStudent: boolean): Section[] {
+  return useMemo(() => {
+    const cx = 200, cy = 200;
+    const out: Section[] = [];
+    const hw = 90, hh = 64; // half-width / half-height of pitch area
+    const d = 22; // stand depth
+
+    // North stand (top)
+    const ns = 10;
+    const segW = (hw * 2) / ns;
+    for (let i = 0; i < ns; i++) {
+      const x1 = cx - hw + i * segW + 1;
+      const x2 = cx - hw + (i + 1) * segW - 1;
+      const y1 = cy - hh - d;
+      const y2 = cy - hh;
+      const isStudent = showStudent && i >= 3 && i <= 6;
+      const f = clamp(fillRatio + sRand(i * 7) * 0.06 - 0.03, 0, 1);
+      out.push({ id: `n-${i}`, path: `M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${x1} ${y2}Z`, fill: f, isStudent, tier: "lower" });
+    }
+    // South stand (bottom)
+    for (let i = 0; i < ns; i++) {
+      const x1 = cx - hw + i * segW + 1;
+      const x2 = cx - hw + (i + 1) * segW - 1;
+      const y1 = cy + hh;
+      const y2 = cy + hh + d;
+      const isS = showStudent && i >= 3 && i <= 6;
+      const f = clamp(fillRatio + sRand(i * 11 + 30) * 0.06 - 0.03, 0, 1);
+      out.push({ id: `s-${i}`, path: `M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${x1} ${y2}Z`, fill: f, isStudent: isS, tier: "lower" });
+    }
+    // West (left)
+    const ss = 10;
+    const innerH = hh * 2;
+    const segH = innerH / ss;
+    for (let i = 0; i < ss; i++) {
+      const y1 = cy - hh + i * segH + 1;
+      const y2 = cy - hh + (i + 1) * segH - 1;
+      const x1 = cx - hw - d;
+      const x2 = cx - hw;
+      const f = clamp(fillRatio * 0.95 + sRand(i * 13 + 50) * 0.06 - 0.03, 0, 1);
+      out.push({ id: `w-${i}`, path: `M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${x1} ${y2}Z`, fill: f, isStudent: false, tier: "lower" });
+    }
+    // East (right)
+    for (let i = 0; i < ss; i++) {
+      const y1 = cy - hh + i * segH + 1;
+      const y2 = cy - hh + (i + 1) * segH - 1;
+      const x1 = cx + hw;
+      const x2 = cx + hw + d;
+      const f = clamp(fillRatio * 0.95 + sRand(i * 17 + 70) * 0.06 - 0.03, 0, 1);
+      out.push({ id: `e-${i}`, path: `M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${x1} ${y2}Z`, fill: f, isStudent: false, tier: "lower" });
+    }
+    // Corner fills
+    const corners = [
+      { id: "cnw", x: cx - hw - d, y: cy - hh - d, w: d, h: d },
+      { id: "cne", x: cx + hw, y: cy - hh - d, w: d, h: d },
+      { id: "csw", x: cx - hw - d, y: cy + hh, w: d, h: d },
+      { id: "cse", x: cx + hw, y: cy + hh, w: d, h: d },
+    ];
+    corners.forEach((c, ci) => {
+      const f = clamp(fillRatio * 0.8 + sRand(ci * 19 + 90) * 0.06 - 0.03, 0, 1);
+      out.push({ id: c.id, path: `M${c.x} ${c.y}L${c.x + c.w} ${c.y}L${c.x + c.w} ${c.y + c.h}L${c.x} ${c.y + c.h}Z`, fill: f, isStudent: false, tier: "lower" });
+    });
+    return out;
+  }, [fillRatio, showStudent]);
+}
+
+function SoccerPitch() {
+  const cx = 200, cy = 200, pw = 160, ph = 112;
+  return (
+    <g>
+      <rect x={cx - pw / 2} y={cy - ph / 2} width={pw} height={ph} rx="2" fill="#1b5e28" />
+      <rect x={cx - pw / 2 + 2} y={cy - ph / 2 + 2} width={pw - 4} height={ph - 4} rx="1" fill="#228833" />
+      <g stroke="rgba(255,255,255,0.4)" strokeWidth="0.7" fill="none">
+        <rect x={cx - pw / 2 + 5} y={cy - ph / 2 + 5} width={pw - 10} height={ph - 10} />
+        <line x1={cx} y1={cy - ph / 2 + 5} x2={cx} y2={cy + ph / 2 - 5} />
+        <circle cx={cx} cy={cy} r="12" />
+        <circle cx={cx} cy={cy} r="1.3" fill="rgba(255,255,255,0.4)" />
+        <rect x={cx - 22} y={cy - ph / 2 + 5} width="44" height="16" />
+        <rect x={cx - 22} y={cy + ph / 2 - 21} width="44" height="16" />
+        <rect x={cx - 10} y={cy - ph / 2 + 5} width="20" height="7" />
+        <rect x={cx - 10} y={cy + ph / 2 - 12} width="20" height="7" />
+      </g>
+    </g>
+  );
+}
+
+/* ================================================================== */
+/*  MAIN EXPORTED COMPONENT                                            */
+/* ================================================================== */
 export function StadiumFillViz({
   attendance,
   capacity,
   studentRatio,
   showStudentSplit = true,
-  venueName = "Ohio Stadium",
+  venueName = "Stadium",
   sport = "football",
   className = "",
 }: StadiumFillVizProps) {
   const safeCapacity = Math.max(1, capacity);
-  const fillRatio = clamp(attendance / safeCapacity, 0, 1.2);
+  const fillRatio = clamp(attendance / safeCapacity, 0, 1.15);
   const fillPct = Math.min(100, fillRatio * 100);
   const ratio = showStudentSplit ? clamp(studentRatio ?? 0, 0, 1) : 0;
   const studentCount = Math.round(attendance * ratio);
   const generalCount = Math.max(0, attendance - studentCount);
   const availableCount = Math.max(0, capacity - attendance);
-
+  const isSellout = fillPct >= 98;
   const sportKey = resolveSport(sport);
-  const layout = SPORT_LAYOUTS[sportKey];
+  const fr = clamp(fillRatio, 0, 1);
 
-  const sections = useMemo(
-    () => getSections(layout, clamp(fillRatio, 0, 1), showStudentSplit),
-    [layout, fillRatio, showStudentSplit],
-  );
-  const footballSections = useMemo(
-    () => (sportKey === "football" ? getFootballSections(attendance, safeCapacity, showStudentSplit) : []),
-    [attendance, safeCapacity, showStudentSplit, sportKey],
-  );
+  /* Compute sections for every sport — hooks must be unconditional */
+  const fb = useFootballSections(fr, showStudentSplit && sportKey === "football");
+  const bk = useArenaSections(fr, showStudentSplit && (sportKey === "basketball" || sportKey === "volleyball"));
+  const bb = useBaseballSections(fr, showStudentSplit && sportKey === "baseball");
+  const sc = useSoccerSections(fr, showStudentSplit && sportKey === "soccer");
+
+  const sections =
+    sportKey === "football" ? fb
+    : sportKey === "basketball" || sportKey === "volleyball" ? bk
+    : sportKey === "baseball" ? bb
+    : sc;
+
+  const vb = sportKey === "baseball" ? "0 0 400 340" : "0 0 400 400";
+  const svgCx = 200;
+  const svgCy = sportKey === "baseball" ? 240 : 200;
+
+  const archLabel =
+    sportKey === "football" ? "Horseshoe Bowl"
+    : sportKey === "basketball" ? "Enclosed Arena"
+    : sportKey === "volleyball" ? "Compact Arena"
+    : sportKey === "baseball" ? "Diamond Park"
+    : "Rectangular Pitch";
+
+  const [hovered, setHovered] = useState<Section | null>(null);
 
   return (
-    <div
-      className={`rounded-2xl border border-white/10 overflow-hidden ${className}`}
+    <motion.div
+      className={`rounded-2xl border border-white/[0.08] overflow-hidden ${className}`}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
       style={{
         background:
-          "radial-gradient(120% 120% at 0% 0%, hsl(354 40% 18% / 0.35), transparent 40%), linear-gradient(140deg, hsl(220 18% 8%) 0%, hsl(224 20% 13%) 100%)",
+          "linear-gradient(160deg, hsl(220 22% 6%) 0%, hsl(224 20% 10%) 50%, hsl(220 18% 8%) 100%)",
       }}
     >
-      <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+      {/* ---- Header ---- */}
+      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold flex items-center gap-2">
-            <span className="text-lg">{layout.icon}</span>
-            {venueName}
+            <span className="text-white/90">{venueName}</span>
+            {isSellout && (
+              <motion.span
+                className="px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider"
+                style={{
+                  background: "linear-gradient(135deg, hsl(354 78% 50%), hsl(354 78% 38%))",
+                  boxShadow: "0 2px 12px hsl(354 78% 50% / 0.5)",
+                  color: "white",
+                }}
+                animate={{
+                  boxShadow: [
+                    "0 2px 12px hsl(354 78% 50% / 0.3)",
+                    "0 2px 20px hsl(354 78% 50% / 0.6)",
+                    "0 2px 12px hsl(354 78% 50% / 0.3)",
+                  ],
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                SELLOUT
+              </motion.span>
+            )}
           </div>
-          <div className="text-xs text-[hsl(var(--muted-fg))]">{layout.label}</div>
+          <div className="text-[11px] text-white/35 mt-0.5 uppercase tracking-wider font-medium">
+            {archLabel}
+          </div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold" style={{ color: fillPct >= 95 ? "hsl(var(--scarlet))" : "white" }}>
-            {fillPct.toFixed(1)}%
+          <motion.div
+            className="text-2xl font-bold tabular-nums tracking-tight"
+            style={{
+              color: isSellout
+                ? "hsl(354 78% 55%)"
+                : fillPct >= 90
+                  ? "hsl(45 90% 55%)"
+                  : fillPct >= 70
+                    ? "hsl(180 60% 50%)"
+                    : "hsl(220 15% 60%)",
+              textShadow: isSellout ? "0 0 16px hsl(354 78% 55% / 0.5)" : "none",
+            }}
+            key={Math.round(fillPct)}
+            initial={{ scale: 1.05, opacity: 0.7 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <AnimNum value={fillPct} fmt={(v) => `${v.toFixed(1)}%`} />
+          </motion.div>
+          <div className="text-[10px] text-white/30 tabular-nums">
+            <AnimNum value={attendance} fmt={(v) => Math.round(v).toLocaleString()} />{" "}
+            / {capacity.toLocaleString()}
           </div>
-          <div className="text-xs text-[hsl(var(--muted-fg))]">{attendance.toLocaleString()} / {capacity.toLocaleString()}</div>
         </div>
       </div>
 
-      <div className="relative p-4">
-        <div className="relative w-full aspect-[4/3] max-w-[360px] mx-auto">
-          <svg viewBox="0 0 260 190" className="w-full h-full">
-            <rect x="18" y="16" width="224" height="158" rx="18" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" />
+      {/* ---- SVG Visualization ---- */}
+      <div className="relative px-3 py-4">
+        <div
+          className="relative w-full max-w-[420px] mx-auto"
+          style={{ aspectRatio: sportKey === "baseball" ? "400/340" : "1" }}
+        >
+          <svg viewBox={vb} className="w-full h-full" style={{ overflow: "visible" }}>
+            <defs>
+              <filter id="sfv-blur">
+                <feGaussianBlur stdDeviation="6" />
+              </filter>
+              <radialGradient id="sfv-heat" cx="50%" cy={sportKey === "baseball" ? "70%" : "50%"} r="50%">
+                <stop offset="0%" stopColor="hsl(354 78% 50%)" stopOpacity={clamp((fr - 0.75) * 2.5, 0, 0.18)} />
+                <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+              </radialGradient>
+            </defs>
 
-            {sportKey === "football"
-              ? footballSections.map((section) => (
-                  <g key={section.index}>
-                    <path
-                      d={section.d}
-                      fill={section.color}
-                      stroke="rgba(255,255,255,0.1)"
-                      strokeWidth="0.7"
-                      opacity={0.4 + section.fill * 0.6}
-                    />
-                    {section.fill > 0.8 ? (
-                      <circle cx={section.markerX} cy={section.markerY} r="2" fill="rgba(255,255,255,0.6)" />
-                    ) : null}
-                  </g>
-                ))
-              : sections.map((section) => (
-                  <path
-                    key={section.index}
-                    d={section.d}
-                    fill={section.color}
-                    stroke="rgba(255,255,255,0.12)"
-                    strokeWidth="0.7"
-                    opacity={0.35 + section.fill * 0.65}
-                  />
-                ))}
+            {/* Background ambient glow */}
+            <ellipse cx={svgCx} cy={svgCy} rx="190" ry="190" fill="url(#sfv-heat)" />
 
-            {sportKey !== "football" && (
-              <ellipse cx={layout.centerX} cy={layout.centerY} rx={layout.innerRadius - 4} ry={(layout.innerRadius - 4) * layout.yScale} fill="rgba(7,10,18,0.4)" />
+            {/* Sport-specific playing surface */}
+            {sportKey === "football" && <FootballField />}
+            {sportKey === "basketball" && <BasketballCourt />}
+            {sportKey === "volleyball" && <VolleyballCourt />}
+            {sportKey === "baseball" && <BaseballDiamond />}
+            {sportKey === "soccer" && <SoccerPitch />}
+
+            {/* Seating sections */}
+            {sections.map((s) => (
+              <path
+                key={s.id}
+                d={s.path}
+                fill={sectionColor(s.fill, s.isStudent, s.tier)}
+                stroke={sectionStroke(s.fill, s.isStudent)}
+                strokeWidth={s.isStudent && s.fill > 0.5 ? "1" : "0.5"}
+                opacity={0.55 + s.fill * 0.45}
+                style={{
+                  filter: sectionFilter(s.fill, s.isStudent),
+                  cursor: "pointer",
+                  transition: "fill 0.35s ease, opacity 0.35s ease, filter 0.35s ease",
+                }}
+                onMouseEnter={() => setHovered(s)}
+                onMouseLeave={() => setHovered(null)}
+              />
+            ))}
+
+            {/* Pulse rings at high fill */}
+            <PulseRings cx={svgCx} cy={svgCy} intensity={fr} />
+
+            {/* Labels */}
+            {sportKey === "football" && (
+              <text x={svgCx} y={svgCy + 100} textAnchor="middle" fontSize="8"
+                fill="rgba(255,255,255,0.18)"
+                style={{ letterSpacing: "0.18em", fontWeight: 600 }}>
+                OPEN SOUTH END
+              </text>
             )}
-
-            <SportField sport={sportKey} />
-
-            <text
-              x="130"
-              y="168"
-              textAnchor="middle"
-              fontSize="10"
-              fill="rgba(255,255,255,0.6)"
-              style={{ letterSpacing: "0.08em", textTransform: "uppercase" }}
-            >
-              {sportKey}
-            </text>
+            {(sportKey === "basketball" || sportKey === "volleyball") && (
+              <text x={svgCx} y={38} textAnchor="middle" fontSize="8"
+                fill="rgba(255,255,255,0.18)"
+                style={{ letterSpacing: "0.15em", fontWeight: 600 }}>
+                ENCLOSED ARENA
+              </text>
+            )}
           </svg>
 
-          {fillPct >= 100 && (
-            <div className="absolute top-2 right-2 px-2 py-1 rounded-full text-[10px] font-bold bg-[hsl(var(--scarlet))] text-white animate-pulse">
-              SELLOUT
-            </div>
-          )}
+          {/* Hover tooltip */}
+          <AnimatePresence>
+            {hovered && (
+              <motion.div
+                className="absolute top-3 left-3 px-3 py-2 rounded-lg text-xs pointer-events-none z-10"
+                style={{
+                  background: "rgba(0,0,0,0.88)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  backdropFilter: "blur(8px)",
+                }}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.12 }}
+              >
+                <div className="font-semibold text-white/80 capitalize">
+                  {hovered.id.replace(/-/g, " ")}
+                </div>
+                <div className="flex items-center gap-3 mt-1 text-[10px] text-white/50">
+                  <span>{(hovered.fill * 100).toFixed(0)}% filled</span>
+                  {hovered.isStudent && (
+                    <span className="text-[hsl(354,78%,55%)]">Student section</span>
+                  )}
+                  <span className="capitalize">{hovered.tier}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
+      {/* ---- Stats footer ---- */}
       {showStudentSplit ? (
-        <div className="px-4 py-3 border-t border-white/10 grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-lg font-bold text-[hsl(var(--scarlet))]">{studentCount.toLocaleString()}</div>
-            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">Students</div>
-          </div>
-          <div>
-            <div className="text-lg font-bold text-gray-300">{generalCount.toLocaleString()}</div>
-            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">General</div>
-          </div>
-          <div>
-            <div className="text-lg font-bold text-white">{availableCount.toLocaleString()}</div>
-            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">Available</div>
+        <div className="px-4 py-3 border-t border-white/[0.06]" style={{ background: "rgba(0,0,0,0.15)" }}>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { v: studentCount, label: "Students", c: "hsl(354 78% 55%)", bar: "hsl(354 78% 55% / 0.4)" },
+              { v: generalCount, label: "General", c: "hsl(215 30% 65%)", bar: "hsl(215 30% 50% / 0.3)" },
+              { v: availableCount, label: "Available", c: "hsl(220 10% 45%)", bar: "hsl(220 10% 30% / 0.3)" },
+            ].map((s) => (
+              <div key={s.label} className="text-center">
+                <motion.div
+                  className="text-lg font-bold tabular-nums"
+                  style={{ color: s.c }}
+                  key={s.v}
+                  initial={{ y: 3, opacity: 0.5 }}
+                  animate={{ y: 0, opacity: 1 }}
+                >
+                  <AnimNum value={s.v} fmt={(v) => Math.round(v).toLocaleString()} />
+                </motion.div>
+                <div className="text-[9px] text-white/30 uppercase tracking-widest font-semibold mt-0.5">
+                  {s.label}
+                </div>
+                <div className="mt-1.5 h-[2px] rounded-full mx-auto w-10" style={{ background: s.bar }} />
+              </div>
+            ))}
           </div>
         </div>
       ) : (
-        <div className="px-4 py-3 border-t border-white/10 grid grid-cols-2 gap-4 text-center">
-          <div>
-            <div className="text-lg font-bold text-[hsl(var(--scarlet))]">{attendance.toLocaleString()}</div>
-            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">Attendance</div>
-          </div>
-          <div>
-            <div className="text-lg font-bold text-white">{fillPct.toFixed(1)}%</div>
-            <div className="text-[10px] text-[hsl(var(--muted-fg))] uppercase tracking-wider">Fill Rate</div>
+        <div className="px-4 py-3 border-t border-white/[0.06]" style={{ background: "rgba(0,0,0,0.15)" }}>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center">
+              <motion.div className="text-lg font-bold tabular-nums" style={{ color: "hsl(354 78% 55%)" }}>
+                <AnimNum value={attendance} fmt={(v) => Math.round(v).toLocaleString()} />
+              </motion.div>
+              <div className="text-[9px] text-white/30 uppercase tracking-widest font-semibold mt-0.5">
+                Attendance
+              </div>
+            </div>
+            <div className="text-center">
+              <motion.div className="text-lg font-bold tabular-nums text-white/70">
+                <AnimNum value={fillPct} fmt={(v) => `${v.toFixed(1)}%`} />
+              </motion.div>
+              <div className="text-[9px] text-white/30 uppercase tracking-widest font-semibold mt-0.5">
+                Fill Rate
+              </div>
+            </div>
           </div>
         </div>
       )}
-    </div>
+
+      {/* ---- Legend ---- */}
+      <div className="px-4 py-2 border-t border-white/[0.04] flex items-center justify-center gap-5 text-[8px] text-white/25 uppercase tracking-widest font-medium">
+        {showStudentSplit && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-sm"
+              style={{ background: "hsl(354 70% 40%)", boxShadow: "0 0 4px hsl(354 70% 40% / 0.5)" }} />
+            <span>Block O</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-sm" style={{ background: "hsl(215 28% 32%)" }} />
+          <span>General</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-sm" style={{ background: "hsl(220 15% 9%)" }} />
+          <span>Empty</span>
+        </div>
+      </div>
+    </motion.div>
   );
 }
