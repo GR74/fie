@@ -1,11 +1,9 @@
 """
-Weather data integration using Open-Meteo API (free, no key required).
+Weather data integration.
 
-Provides:
-  - Forecast weather for upcoming game days (up to 16 days ahead)
-  - Historical weather normals for Columbus OH as fallback
+Primary (official): NWS api.weather.gov (National Weather Service / NOAA).
+Fallback: Open-Meteo (third-party). Historical: NOAA/NWS 1991-2020 normals.
 
-Data source: Open-Meteo (https://open-meteo.com/)
 Columbus, OH coordinates: 39.9612, -82.9988
 """
 
@@ -30,14 +28,17 @@ _cache: dict[str, tuple[float, Any]] = {}
 CACHE_TTL_SECONDS = 1800  # 30 minutes for weather
 
 
-def _cached_get(url: str) -> Any | None:
+def _cached_get(url: str, headers: dict | None = None) -> Any | None:
     now = time.time()
     if url in _cache:
         ts, data = _cache[url]
         if now - ts < CACHE_TTL_SECONDS:
             return data
+    hdr = headers or {}
+    if "User-Agent" not in hdr:
+        hdr["User-Agent"] = "FanImpactEngine/1.0 (contact: FIE-project)"
     try:
-        req = Request(url, headers={"User-Agent": "FanImpactEngine/1.0"})
+        req = Request(url, headers=hdr)
         with urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
             _cache[url] = (now, data)
@@ -45,6 +46,10 @@ def _cached_get(url: str) -> Any | None:
     except (URLError, json.JSONDecodeError, TimeoutError) as e:
         logger.warning("Weather API request failed for %s: %s", url, e)
         return None
+
+
+# NWS requires a descriptive User-Agent (https://www.weather.gov/documentation/services-web-api)
+NWS_HEADERS = {"User-Agent": "FanImpactEngine/1.0 (Ohio State game-day simulator; contact: FIE-project)", "Accept": "application/json"}
 
 
 # --- Historical monthly normals for Columbus OH (NWS/NOAA climatology) ---
@@ -69,15 +74,11 @@ def get_forecast_weather(game_date: str, kickoff_time: str = "12:00") -> dict[st
     """
     Get weather forecast for a specific game date in Columbus OH.
 
-    Uses Open-Meteo forecast API (up to 16 days ahead) or falls back
-    to historical normals for dates further out.
-
-    Args:
-        game_date: ISO date string (YYYY-MM-DD)
-        kickoff_time: HH:MM local time
+    Tries in order: NWS (official, 7-day), Open-Meteo (third-party, 16-day),
+    then NOAA/NWS 1991-2020 climate normals.
 
     Returns dict with:
-        temp_f, wind_mph, precip_chance_pct, conditions, source
+        temp_f, wind_mph, precip_chance_pct, conditions, source, _api
     """
     try:
         target = date.fromisoformat(game_date)
@@ -86,14 +87,68 @@ def get_forecast_weather(game_date: str, kickoff_time: str = "12:00") -> dict[st
 
     days_ahead = (target - date.today()).days
 
-    # Open-Meteo forecast covers up to 16 days
+    # Official: NWS api.weather.gov (7-day forecast)
+    if 0 <= days_ahead <= 7:
+        forecast = _fetch_nws_forecast(game_date, kickoff_time)
+        if forecast:
+            return forecast
+
+    # Third-party fallback: Open-Meteo (up to 16 days)
     if 0 <= days_ahead <= 16:
         forecast = _fetch_open_meteo_forecast(game_date, kickoff_time)
         if forecast:
             return forecast
 
-    # Fallback to normals
     return _get_normals_fallback(game_date, kickoff_time)
+
+
+def _fetch_nws_forecast(game_date: str, kickoff_time: str) -> dict[str, Any] | None:
+    """Fetch from NWS api.weather.gov (official US government)."""
+    points_url = f"https://api.weather.gov/points/{COLUMBUS_LAT},{COLUMBUS_LON}"
+    points = _cached_get(points_url, headers=NWS_HEADERS)
+    if not points or "properties" not in points:
+        return None
+    props = points.get("properties", {})
+    forecast_url = props.get("forecast")
+    if not forecast_url:
+        return None
+    data = _cached_get(forecast_url, headers=NWS_HEADERS)
+    if not data or "properties" not in data or "periods" not in data.get("properties", {}):
+        return None
+    periods = data["properties"]["periods"]
+    try:
+        target = date.fromisoformat(game_date)
+        hour = int(kickoff_time.split(":")[0]) if kickoff_time else 12
+    except (ValueError, IndexError):
+        return None
+    # NWS periods are named "Tonight", "Today", "Wednesday", etc. Match by date
+    for p in periods:
+        start = p.get("start", "")[:10]
+        if start == game_date:
+            # Use first period that matches game date; NWS doesn't give hour-level for all
+            temp = p.get("temperature")
+            if temp is None:
+                continue
+            wind = p.get("windSpeed", "")
+            # Parse "10 mph" or "10 to 15 mph"
+            wind_mph = 8
+            if isinstance(wind, str) and "mph" in wind:
+                try:
+                    wind_mph = int(wind.split()[0])
+                except (ValueError, IndexError):
+                    pass
+            elif isinstance(wind, (int, float)):
+                wind_mph = int(wind)
+            return {
+                "temp_f": int(temp),
+                "wind_mph": min(25, max(0, wind_mph)),
+                "precip_chance_pct": 0,  # NWS period doesn't always include probability
+                "conditions": p.get("shortForecast", "Forecast"),
+                "source": "LIVE",
+                "_api": "NWS api.weather.gov (National Weather Service / NOAA)",
+                "_retrieved_at": datetime.utcnow().isoformat() + "Z",
+            }
+    return None
 
 
 def _fetch_open_meteo_forecast(game_date: str, kickoff_time: str) -> dict[str, Any] | None:

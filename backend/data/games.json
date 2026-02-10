@@ -259,7 +259,7 @@
     "kickoff_time_local": "19:00",
     "rivalry_flag": true,
     "game_stakes": "rivalry",
-    "opponent_rank": 15,
+    "opponent_rank": 1,
     "home_team_rank": null,
     "baseline_attendance": 16500,
     "baseline_student_ratio": 0.24,
@@ -268,7 +268,7 @@
     "baseline_weather_precip_chance": 0,
     "baseline_promotion_type": "rivalry_hype",
     "_attendance_source": "ESTIMATED: Michigan rivalry is biggest basketball draw. 2023-24 avg ~13,000-14,500 but rivalry bumps to 16k+",
-    "_ranking_source": "ESTIMATED: Michigan protected Big Ten rival. OSU likely unranked, Michigan fringe top-15."
+    "_ranking_source": "ESTIMATED: Michigan elite (top-2 talent nationally). OSU rebuilding/unranked; null → 25 in model."
   },
   {
     "game_id": "michigan_state_bb_at_osu_2026",

@@ -114,10 +114,11 @@ _COEFF_STUDENT = 1.00  # _source: [MW11] student noise 1.5-2.5× general; calibr
 # rivalry: [ESTIMATED] Rivalry atmosphere boosts HFA by ~2-4 pp.
 _COEFF_RIVALRY = 0.30  # _source: ESTIMATED from rivalry HFA literature; 2-4 pp boost
 
-# rank_edge: Team quality is the dominant predictor.
-#   Using Elo-inspired transformation: edge = (opp_rank - home_rank)/25
-#   with a sigmoid compression to avoid extreme predictions.
-_COEFF_RANK = 0.90  # _source: SP+/FPI point-spread models; calibrated
+# rank_edge: Team quality is the dominant predictor of outcome (stronger than HCA).
+#   Research: home-court advantage ~3-4 pts; team strength drives win prob [academic HCA].
+#   edge = (opp_rank - home_rank)/20 (steeper scale so rank gaps matter more).
+#   When opponent is elite (#1) and home unranked (#25), home win prob should be ~35-42%, not majority.
+_COEFF_RANK = 2.00  # _source: calibrated so #1 vs #25 yields ~38% home; HFA adds ~3-4 pp on top
 
 # rank_edge non-linearity: Large mismatches have diminishing marginal returns.
 #   This captures the Elo insight that a 400-point gap ≈ 91% expected, not 100%.
@@ -179,7 +180,8 @@ def predict_hfa(inputs: HfaInputs) -> dict[str, Any]:
     fill_clamped = max(0.0, min(fill, 1.0))
     fill_centered = fill_clamped - 0.85  # Center around typical FBS fill
 
-    rank_edge = (inputs.opponent_rank - inputs.home_team_rank) / 25.0
+    # Steeper scale (÷20): rank gap drives win prob; null/unranked passed as 25 by callers.
+    rank_edge = (inputs.opponent_rank - inputs.home_team_rank) / 20.0
     # Elo-inspired compression: tanh squashes extreme mismatches [FTE, HA10]
     rank_compressed = math.tanh(rank_edge * _COEFF_RANK_COMPRESS)
 

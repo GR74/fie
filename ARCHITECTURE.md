@@ -136,7 +136,7 @@ logit = INTERCEPT
 win_probability = sigmoid(logit) + uncertainty_noise
 ```
 
-The `tanh(rank_diff / 10)` term compresses rank differences so that #1 vs #25 is not 5x the effect of #1 vs #5, matching Elo rating system behavior.
+Team strength (opponent_rank vs home_team_rank) is the **dominant** predictor; HCA (fill, crowd, rivalry) is a smaller additive effect (~3–4 pp). The rank term uses `rank_edge = (opponent_rank - home_team_rank) / 20` and a coefficient ~2.0 so that when the opponent is elite (#1) and the home team is unranked (#25), home win probability is ~35–42%, not a majority. Unranked teams use rank 25 when null. The `tanh` compression avoids extreme predictions (Elo-style).
 
 #### Uncertainty
 

@@ -80,6 +80,7 @@ export default function GamePage() {
 
   const [optimizing, setOptimizing] = useState(false);
   const [optError, setOptError] = useState<string | null>(null);
+  const [hasTouchedSeatsOpen, setHasTouchedSeatsOpen] = useState(false);
 
   const gameQuery = useQuery({
     queryKey: ["game", gameId],
@@ -192,7 +193,7 @@ export default function GamePage() {
     const c = sim?.counterfactual.hfa.feature_contributions_pp ?? {};
     const rows = Object.entries(c)
       .map(([k, v]) => {
-        const pp = Number(v.toFixed(2));
+        const pp = Number.isFinite(Number(v)) ? Number(Number(v).toFixed(2)) : 0;
         return {
           lever: k.replaceAll("_", " "),
           pos: pp > 0 ? pp : 0,
@@ -257,6 +258,7 @@ export default function GamePage() {
   // Reset to baseline
   const resetToBaseline = () => {
     if (!game) return;
+    setHasTouchedSeatsOpen(false);
     setOverrides({
       crowd_energy: 78,
       stands_open_pct: 85,
@@ -362,6 +364,16 @@ export default function GamePage() {
                   TV: {enriched.live.live_broadcast}
                 </span>
               )}
+              {enriched?.live?.live_opponent_record && (
+                <span className="text-[11px] text-white/70">
+                  Opponent record: {enriched.live.live_opponent_record}
+                </span>
+              )}
+              {enriched?.live?.live_result && (
+                <span className="text-[11px] text-white/70">
+                  Result: {enriched.live.live_result}
+                </span>
+              )}
             </div>
             {enriched?.data_sources && <DataSourceBar sources={enriched.data_sources} />}
           </div>
@@ -452,6 +464,11 @@ export default function GamePage() {
           <Link href={`/games/${gameId}/sensitivity`}>
             <GlassButton type="button">Surface</GlassButton>
           </Link>
+          {game?.alternate_venue_id ? (
+            <Link href={`/games/${gameId}/compare-venues`}>
+              <GlassButton type="button">Compare venues</GlassButton>
+            </Link>
+          ) : null}
           <ShortcutsHelp shortcuts={shortcuts} />
           <Link href={`/games/${gameId}/engine-report`}>
             <GlassButton type="button" variant="primary">
@@ -544,7 +561,7 @@ export default function GamePage() {
           </div>
 
           <div className="mt-4 relative">
-            <div className="grid grid-cols-4 gap-1 rounded-xl p-1" style={{ background: "rgba(255,255,255,0.03)" }}>
+            <div className="grid grid-cols-4 gap-2 rounded-xl p-1.5" style={{ background: "rgba(255,255,255,0.03)" }}>
               {(
                 [
                   ["competitive", "Competitive", "\u2694\uFE0F"],
@@ -557,7 +574,7 @@ export default function GamePage() {
                   key={k}
                   onClick={() => setTab(k)}
                   className={cn(
-                    "relative rounded-lg px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider transition-all duration-200",
+                    "relative flex min-w-0 flex-col items-center justify-center rounded-lg px-2 py-2 text-center text-[9px] font-bold uppercase leading-tight tracking-wide transition-all duration-200",
                     tab === k
                       ? "text-white"
                       : "text-white/35 hover:text-white/55",
@@ -575,7 +592,7 @@ export default function GamePage() {
                       transition={{ type: "spring", stiffness: 350, damping: 30 }}
                     />
                   )}
-                  <span className="relative z-10">{label}</span>
+                  <span className="relative z-10 block w-full truncate">{label}</span>
                 </button>
               ))}
             </div>
@@ -656,7 +673,49 @@ export default function GamePage() {
                   max={attendanceMax}
                   step={sportScope.ranges.attendance.step}
                   format={(v) => (v ?? 0).toLocaleString()}
-                  onChange={(v) => setOverrides((s) => ({ ...s, attendance: v }))}
+                  onChange={(v) =>
+                    setOverrides((s) => {
+                      const next = { ...s, attendance: v };
+                      if (!game) return next;
+
+                      const minSeats = sportScope.ranges.seatsOpenPct.min;
+                      const maxSeats = sportScope.ranges.seatsOpenPct.max;
+
+                      const venueCap =
+                        s.venue_id && s.venue_id === game.alternate_venue_id
+                          ? (game.alternate_venue_capacity ?? game.venue_capacity)
+                          : game.venue_capacity;
+
+                      if (!venueCap || venueCap <= 0) {
+                        return next;
+                      }
+
+                      const currentSeats = s.seats_open_pct ?? 100;
+
+                      // If user hasn't manually adjusted seats, derive a sensible default
+                      // so fill stays in a realistic band across all sports.
+                      if (!hasTouchedSeatsOpen) {
+                        const targetFill = 0.9; // aim for ~90% fill
+                        const rawPct = (v / (venueCap * targetFill)) * 100;
+                        const recommended = Number.isFinite(rawPct) ? Math.round(rawPct) : currentSeats;
+                        const clamped = Math.max(minSeats, Math.min(maxSeats, recommended));
+                        next.seats_open_pct = clamped;
+                        return next;
+                      }
+
+                      // If user has set seats manually, only adjust to avoid impossible combos
+                      // (attendance greater than seats-open capacity).
+                      const effectiveCapForCurrent = (venueCap * currentSeats) / 100;
+                      if (v > effectiveCapForCurrent) {
+                        const requiredRaw = (v / venueCap) * 100;
+                        const required = Number.isFinite(requiredRaw) ? Math.ceil(requiredRaw) : currentSeats;
+                        const clampedRequired = Math.max(minSeats, Math.min(maxSeats, required));
+                        next.seats_open_pct = clampedRequired;
+                      }
+
+                      return next;
+                    })
+                  }
                 />
                 {showStudentRatio && (
                   <Control
@@ -694,7 +753,10 @@ export default function GamePage() {
                   max={sportScope.ranges.seatsOpenPct.max}
                   step={sportScope.ranges.seatsOpenPct.step}
                   format={(v) => `${v ?? 100}%`}
-                  onChange={(v) => setOverrides((s) => ({ ...s, seats_open_pct: v }))}
+                  onChange={(v) => {
+                    setHasTouchedSeatsOpen(true);
+                    setOverrides((s) => ({ ...s, seats_open_pct: v }));
+                  }}
                 />
                 <div className="glass-strong rounded-2xl border border-white/10 p-3 text-xs">
                   <div className="font-semibold">Seats open (McMahon & Quintanar)</div>

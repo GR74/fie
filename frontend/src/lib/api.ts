@@ -325,6 +325,9 @@ export type LiveGameData = {
   live_venue_capacity?: number;
   live_home_rank?: number;
   live_away_rank?: number;
+  live_opponent_record?: string;
+  live_home_record?: string;
+  live_result?: string;
   _source?: string;
 };
 

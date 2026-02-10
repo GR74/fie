@@ -142,7 +142,8 @@ export function Control({
   format: (v: number) => string;
   onChange: (v: number) => void;
 }) {
-  const actual = value ?? placeholder ?? min;
+  const raw = value ?? placeholder ?? min;
+  const actual = Math.min(max, Math.max(min, Number.isFinite(raw) ? raw : min));
   return (
     <motion.div 
       className="space-y-2"

@@ -95,6 +95,17 @@ def get_espn_schedule(sport: str = "football", season: int | None = None) -> lis
             venue_info = comp.get("venue", {})
             status = comp.get("status", {}).get("type", {})
 
+            home_rec = ""
+            away_rec = ""
+            for rec in home.get("records", [{}]):
+                if rec.get("type") == "total" and rec.get("summary"):
+                    home_rec = rec.get("summary", "")
+                    break
+            for rec in away.get("records", [{}]):
+                if rec.get("type") == "total" and rec.get("summary"):
+                    away_rec = rec.get("summary", "")
+                    break
+
             game = {
                 "espn_id": ev.get("id"),
                 "date": ev.get("date", ""),
@@ -106,6 +117,8 @@ def get_espn_schedule(sport: str = "football", season: int | None = None) -> lis
                 "away_score": int(away.get("score", {}).get("value", 0)) if status.get("completed") else None,
                 "home_rank": home.get("curatedRank", {}).get("current", 99),
                 "away_rank": away.get("curatedRank", {}).get("current", 99),
+                "home_record": home_rec,
+                "away_record": away_rec,
                 "venue_name": venue_info.get("fullName", ""),
                 "venue_city": venue_info.get("address", {}).get("city", ""),
                 "venue_capacity": venue_info.get("capacity"),
@@ -276,6 +289,14 @@ def enrich_game_with_espn(game_dict: dict[str, Any], sport: str = "football") ->
                 live_data["live_home_rank"] = home_rank
             if away_rank and away_rank < 26:
                 live_data["live_away_rank"] = away_rank
+
+            # Opponent scouting: record and recent form (away team = opponent when OSU is home)
+            if espn_game.get("away_record"):
+                live_data["live_opponent_record"] = espn_game["away_record"]
+            if espn_game.get("home_record"):
+                live_data["live_home_record"] = espn_game["home_record"]
+            if espn_game.get("completed") and espn_game.get("away_score") is not None:
+                live_data["live_result"] = f"{espn_game.get('home_score', 0)}-{espn_game.get('away_score', 0)} (final)"
 
             live_data["_source"] = "ESPN public API (site.api.espn.com)"
             return live_data

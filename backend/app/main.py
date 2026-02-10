@@ -76,9 +76,9 @@ def simulate_game(game_id: str, req: SimulateRequest) -> GameSimulateResponse:
     crowd_defaults = venue.get("crowd", {})
     effective_cap = int(venue.get("capacity", game.venue_capacity))
 
-    # Baseline scenario for this game
+    # Baseline scenario for this game (attendance never above venue capacity)
     base = {
-        "attendance": game.baseline_attendance,
+        "attendance": min(game.baseline_attendance, effective_cap),
         "student_ratio": game.baseline_student_ratio,
         "opponent_rank": game.opponent_rank or 25,
         "home_team_rank": game.home_team_rank or 25,
@@ -96,6 +96,10 @@ def simulate_game(game_id: str, req: SimulateRequest) -> GameSimulateResponse:
         "venue_capacity": effective_cap,
     }
     cf = {**base, **overrides}
+    # Never run with attendance above the selected venue's capacity
+    cap_cf = int(cf.get("venue_capacity", effective_cap))
+    if int(cf.get("attendance", 0)) > cap_cf:
+        cf["attendance"] = cap_cf
 
     def run_one(s: dict) -> dict:
         # McMahon & Quintanar: more empty seats (lower fill) hurts home team. Effective capacity = cap * seats_open_pct/100.

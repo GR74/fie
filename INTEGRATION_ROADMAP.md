@@ -45,12 +45,15 @@ Tracks completed milestones and planned extensions for the Fan Impact Engine. Ro
 
 ### Phase 5: Decision Intelligence
 
-- [ ] **Objective modes** -- profit / fan_growth / mission toggle on optimizer
+- [x] **Objective modes** -- profit / fan_growth / mission toggle on optimizer
   - Profit: maximize concession revenue and ops efficiency
   - Fan growth: maximize attendance and student ratio
   - Mission: maximize student ratio, crowd energy, and "experience" score
-- [ ] **Venue comparison view** -- same game simulated at two venues side-by-side (Covelli vs Schott)
-- [ ] **Opponent scouting integration** -- auto-pull opponent records and recent form from ESPN
+  - Implemented in `backend/src/optimizer.py` (_score_candidate) and game page Optimize tab.
+- [x] **Venue comparison view** -- same game simulated at two venues side-by-side (Covelli vs Schott)
+  - Route: `/games/{id}/compare-venues`. Renders when game has `alternate_venue_id`.
+- [x] **Opponent scouting integration** -- auto-pull opponent records and recent form from ESPN
+  - Enriched endpoint and ESPN schedule now include `live_opponent_record`, `live_home_record`, `live_result` when ESPN match found.
 
 ### Phase 6: Advanced Analytics
 

@@ -1,0 +1,7 @@
+I've been building something I'm pretty excited about: a sports analytics platform that tries to answer a question athletic departments actually care about. What happens when you change the crowd? Not just "more fans is better," but what if you tweak student section size, or how many concession stands are open, or when you run promotions?
+
+The Fan Impact Engine hooks up research on home field advantage (the kind that shows up in real journals) with live data from ESPN and the weather service. You pick a game, move sliders for attendance, student ratio, crowd energy, that kind of thing, and it gives you win probability, crowd noise in decibels, and concessions revenue. So you can compare "what we're planning" vs "what if we pushed student tickets harder" or "what if we opened the lower bowl only."
+
+It works across football, basketball, hockey, volleyball, a few others, and it's built so we can plug in real historical data later and tighten the models. Right now the guts are research-backed formulas and official sources where we can get them (NCAA, NWS, venue capacities). The goal is to make it useful for ops and ADs who have to make calls with incomplete info.
+
+If you're into sports analytics or decision tools that have to work with messy real-world data, I'd love to connect. And if you've ever tried to explain to someone why the crowd actually matters beyond the vibe, this is my attempt to put numbers on it.

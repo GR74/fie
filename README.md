@@ -79,8 +79,26 @@ Pick any game on the schedule, adjust operational levers, and instantly see the 
 ### Live Data Enrichment
 
 - **ESPN API** -- real-time schedules, AP/Coaches rankings, team records, scores
-- **Weather API** -- Open-Meteo forecasts with NOAA 1991-2020 climate normals fallback
+- **Weather API** -- NWS (api.weather.gov) first, then Open-Meteo fallback; NOAA 1991-2020 climate normals for dates beyond forecast
 - **Data provenance badges** -- every metric shows whether it's live, cached, or baseline
+
+## References — Where the data comes from
+
+Every piece of data in FIE comes from a documented source. Use this as the single place to see where each type of data is from.
+
+| Data | Source | Where you see it |
+|------|--------|-------------------|
+| **Weather (forecast)** | **NWS api.weather.gov** (official) for 0–7 days; **Open-Meteo** (fallback) for 8–16 days | Game page weather badge, `/games/{id}/enriched`, `/live/weather/{game_id}` |
+| **Weather (historical normals)** | **NOAA/NWS** Columbus OH 1991–2020 climate normals (official) | When forecast isn’t available; `weather` in enriched response |
+| **Schedules, rankings, attendance, records** | **ESPN public API** (site.api.espn.com) | Game page “ESPN LIVE” badge, opponent record, `/games/{id}/enriched`, `/live/schedule`, `/live/rankings` |
+| **Game baselines (attendance, weather, stakes)** | **games.json**: NCAA (official) where cited as “REAL”; NWS for weather baselines; Big Ten for schedule context | Game list, simulator defaults, `_attendance_source` / `_weather_source` in data |
+| **Venue capacities and names** | **OSU Athletics** and official venue operators (e.g. Columbus Crew, Blue Jackets, Clippers) | All venue dropdowns, capacity displays; `backend/data/venues.json` |
+| **Concessions (stands, staff, service rates)** | **NASC / Levy Restaurants** and arena benchmarks | Concessions simulation; `venues.json` concessions blocks |
+| **Crowd decibel level (dB)** | **Model output** (not live data): physics-based formula in `mock_model.predict_loudness_db()`, calibrated to published stadium readings (Husky Stadium 133.6 dB, Arrowhead 142.2 dB; Moskowitz & Wertheim 2011 for student noise). Inputs: attendance, fill, student ratio, crowd energy, rivalry, indoor/outdoor. | “Loudness” on game page and KPI cards; `counterfactual.noise.projected_decibels` in simulate response |
+| **HFA, noise, concessions models** | **Published research** (McMahon & Quintanar 2024, Bryson et al. 2021, Moskowitz & Wertheim 2011, etc.) | Simulate, optimize, Monte Carlo, sensitivity; `ARCHITECTURE.md` |
+| **Calibration points** | **Synthetic** (for model diagnostics until historical outcomes are added) | `/calibration/hfa`, Calibration page |
+
+**Full details:** See **[DATA_SOURCES.md](./DATA_SOURCES.md)** for every source, official vs third-party, and where it’s used in the codebase.
 
 ## Architecture
 
@@ -212,6 +230,7 @@ Queue-theoretic modeling:
 | `/games/{id}` | Game day simulator with live controls |
 | `/games/{id}/engine` | Engine deep-dive with sensitivity charts |
 | `/games/{id}/engine-report` | Print-optimized PDF report |
+| `/games/{id}/compare-venues` | Same game at two venues (e.g. Schott vs Covelli) |
 | `/games/{id}/live` | Live ESPN + weather enrichment |
 | `/games/{id}/sensitivity` | 2D heatmap sensitivity surface |
 | `/scenario` | Global scenario lab (no specific game) |
