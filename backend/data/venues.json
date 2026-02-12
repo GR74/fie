@@ -1,0 +1,189 @@
+{
+  "_data_sources": {
+    "ohio_stadium": "OSU Athletics / Ohio Stadium official capacity; concessions estimated from ALSD & Levy Restaurants industry benchmarks",
+    "schott": "Jerome Schottenstein Center official capacity 18,809 (OSU Athletics); 72 luxury suites (OSU Athletics); concessions estimated from NASC arena benchmarks",
+    "covelli": "Covelli Center official capacity 3,393 (OSU Athletics, opened 2019, $42M build); concessions estimated from NASC small-venue benchmarks",
+    "bill_davis": "Bill Davis Stadium official capacity 4,450 (OSU Athletics, opened 1997); concessions estimated",
+    "jesse_owens": "Jesse Owens Memorial Stadium official capacity 9,600 (OSU Athletics); primarily track & field, also men's/women's soccer",
+    "huntington_park": "Huntington Park official capacity 10,100 (Columbus Clippers / MiLB); concessions from minor league industry benchmarks",
+    "nationwide_arena": "Nationwide Arena official capacity 18,500 (Columbus Blue Jackets / NHL); concessions from arena industry benchmarks",
+    "historic_crew_stadium": "Historic Crew Stadium official capacity 20,145 (Columbus Crew SC); concessions from MLS venue benchmarks"
+  },
+  "ohio_stadium": {
+    "venue_id": "ohio_stadium",
+    "venue_name": "Ohio Stadium",
+    "nickname": "The Horseshoe",
+    "capacity": 102780,
+    "sport": "football",
+    "is_indoor": false,
+    "opened": 1922,
+    "surface": "FieldTurf",
+    "luxury_suites": 81,
+    "club_seats": 2500,
+    "student_section_seats": 20800,
+    "concessionaire": "Levy Restaurants",
+    "concessions": {
+      "stands_total": 70,
+      "stands_fixed": 52,
+      "stands_portable": 18,
+      "default_stands_open_pct": 85,
+      "default_staff_per_stand": 6,
+      "service_rate_customers_per_staff_per_min": 0.55,
+      "express_lane_service_boost_pct": 20,
+      "_source_service_rate": "NASC industry benchmark: 0.4-0.7 customers/staff/min; midpoint 0.55",
+      "_source_express_boost": "Levy 'Express Eats' data: 15-30% boost; midpoint 20%"
+    },
+    "crowd": {
+      "default_crowd_energy": 78,
+      "_source": "ESTIMATED: High baseline energy for perennial top-5 program with 100+ consecutive sellouts"
+    }
+  },
+  "schott": {
+    "venue_id": "schott",
+    "venue_name": "Value City Arena",
+    "nickname": "The Schott",
+    "capacity": 18809,
+    "sport": "basketball",
+    "is_indoor": true,
+    "opened": 1998,
+    "luxury_suites": 72,
+    "club_seats": 2500,
+    "student_section_seats": 4000,
+    "build_cost_usd": 175000000,
+    "concessions": {
+      "stands_total": 24,
+      "default_stands_open_pct": 90,
+      "default_staff_per_stand": 5,
+      "service_rate_customers_per_staff_per_min": 0.60,
+      "express_lane_service_boost_pct": 18,
+      "_source_service_rate": "NASC arena benchmark: slightly faster than outdoor due to proximity and layout"
+    },
+    "crowd": {
+      "default_crowd_energy": 72,
+      "_source": "ESTIMATED: Moderate baseline; program rebuilding under Jake Diebler (hired 2024)"
+    }
+  },
+  "covelli": {
+    "venue_id": "covelli",
+    "venue_name": "Covelli Center",
+    "nickname": "The Fortress",
+    "capacity": 3393,
+    "sport": "volleyball",
+    "is_indoor": true,
+    "opened": 2019,
+    "build_cost_usd": 42000000,
+    "student_section_seats": 1100,
+    "concessions": {
+      "stands_total": 10,
+      "default_stands_open_pct": 95,
+      "default_staff_per_stand": 4,
+      "service_rate_customers_per_staff_per_min": 0.55,
+      "express_lane_service_boost_pct": 15,
+      "_source": "ESTIMATED from NASC small-venue benchmarks"
+    },
+    "crowd": {
+      "default_crowd_energy": 82,
+      "_source": "ESTIMATED: Intimate venue with passionate volleyball fanbase; top-15 program with frequent sellouts (6-10/season)"
+    }
+  },
+  "bill_davis": {
+    "venue_id": "bill_davis",
+    "venue_name": "Bill Davis Stadium",
+    "capacity": 4450,
+    "sport": "baseball",
+    "is_indoor": false,
+    "opened": 1997,
+    "concessions": {
+      "stands_total": 8,
+      "default_stands_open_pct": 70,
+      "default_staff_per_stand": 3,
+      "service_rate_customers_per_staff_per_min": 0.55,
+      "express_lane_service_boost_pct": 10,
+      "_source": "ESTIMATED from college baseball venue benchmarks; lower stand count reflects smaller facility"
+    },
+    "crowd": {
+      "default_crowd_energy": 55,
+      "_source": "ESTIMATED: College baseball crowds are more relaxed; lower sustained intensity"
+    }
+  },
+  "jesse_owens": {
+    "venue_id": "jesse_owens",
+    "venue_name": "Jesse Owens Memorial Stadium",
+    "capacity": 9600,
+    "sport": "soccer",
+    "is_indoor": false,
+    "opened": 2001,
+    "concessions": {
+      "stands_total": 6,
+      "default_stands_open_pct": 65,
+      "default_staff_per_stand": 3,
+      "service_rate_customers_per_staff_per_min": 0.50,
+      "express_lane_service_boost_pct": 10,
+      "_source": "ESTIMATED: Primary use is track & field; soccer concessions are minimal"
+    },
+    "crowd": {
+      "default_crowd_energy": 55,
+      "_source": "ESTIMATED: Soccer crowds at non-primary venue; lower attendance (800-2,000 typical)"
+    }
+  },
+  "huntington_park": {
+    "venue_id": "huntington_park",
+    "venue_name": "Huntington Park",
+    "capacity": 10100,
+    "sport": "baseball",
+    "is_indoor": false,
+    "opened": 2009,
+    "concessions": {
+      "stands_total": 22,
+      "default_stands_open_pct": 75,
+      "default_staff_per_stand": 4,
+      "service_rate_customers_per_staff_per_min": 0.60,
+      "express_lane_service_boost_pct": 12,
+      "_source": "ESTIMATED from MiLB venue benchmarks; Huntington Park is a top-tier minor league facility"
+    },
+    "crowd": {
+      "default_crowd_energy": 62,
+      "_source": "ESTIMATED: Minor league atmosphere is family-friendly; steady but not intense"
+    }
+  },
+  "nationwide_arena": {
+    "venue_id": "nationwide_arena",
+    "venue_name": "Nationwide Arena",
+    "capacity": 18500,
+    "sport": "hockey",
+    "is_indoor": true,
+    "opened": 2000,
+    "concessions": {
+      "stands_total": 28,
+      "default_stands_open_pct": 80,
+      "default_staff_per_stand": 5,
+      "service_rate_customers_per_staff_per_min": 0.60,
+      "express_lane_service_boost_pct": 18,
+      "_source": "ESTIMATED from NHL arena benchmarks"
+    },
+    "crowd": {
+      "default_crowd_energy": 70,
+      "_source": "ESTIMATED: Arena events have decent energy but not at college football levels"
+    }
+  },
+  "historic_crew_stadium": {
+    "venue_id": "historic_crew_stadium",
+    "venue_name": "Historic Crew Stadium",
+    "capacity": 20145,
+    "sport": "soccer",
+    "is_indoor": false,
+    "opened": 1999,
+    "concessions": {
+      "stands_total": 24,
+      "default_stands_open_pct": 78,
+      "default_staff_per_stand": 5,
+      "service_rate_customers_per_staff_per_min": 0.58,
+      "express_lane_service_boost_pct": 12,
+      "_source": "ESTIMATED from MLS venue benchmarks; first soccer-specific stadium in US"
+    },
+    "crowd": {
+      "default_crowd_energy": 64,
+      "_source": "ESTIMATED: Historic venue now secondary to Lower.com Field; used for startup/exhibition events"
+    }
+  }
+}

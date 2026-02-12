@@ -1,0 +1,46 @@
+{
+  "_data_sources": {
+    "per_cap_spend": "NASC/Technomic 2023 college venue benchmarks: football overall avg $12-$15; student ~40-55% of general. Midpoints used.",
+    "gross_margins": "Aramark 10-K filings, NASC 2023: blended 60-68%; fountain beverages 85-92%; student segment lower mix.",
+    "adjustments": "NASC/Aramark/Technomic published modifier ranges (cold weather, night games, promotions). Midpoints of published ranges.",
+    "last_updated": "2025-01-01",
+    "methodology": "All values represent per-attendee averages across Ohio State home games. Student per-cap is lower due to budget constraints and lower alcohol purchasing. Non-student includes premium/suite contributions blended down."
+  },
+  "segments": {
+    "student": {
+      "per_cap_spend_usd": 7.50,
+      "gross_margin_pct": 59,
+      "_source": "NASC: student spend ~40-55% of general; at $15.50 non-student, student = $6-8.50. Midpoint $7.50"
+    },
+    "nonstudent": {
+      "per_cap_spend_usd": 15.50,
+      "gross_margin_pct": 66,
+      "_source": "NASC/Technomic 2023: Big Ten football avg $14-$18 non-student per-cap. Midpoint $15.50. Margin from Aramark 10-K."
+    }
+  },
+  "adjustments": {
+    "cold_weather_spend_boost_pct": 10,
+    "night_game_spend_boost_pct": 6,
+    "student_push_spend_drop_pct": 5,
+    "family_bundle_spend_drop_pct": 5,
+    "alumni_night_spend_boost_pct": 4,
+    "rivalry_hype_spend_boost_pct": 8,
+    "_sources": {
+      "cold_weather": "Aramark/Delaware North: +8-12% below 45F from hot beverage surge. Midpoint 10%.",
+      "night_game": "Technomic 2022: +5-8% for night games (longer dwell time, more alcohol). Midpoint 6%.",
+      "student_push": "ESTIMATED: -4% to -8% per-cap when student ratio rises (lower individual spend). Midpoint 5%.",
+      "family_bundle": "ESTIMATED: -3% to -6% per-cap from discounted bundles. Midpoint 5%.",
+      "alumni_night": "ESTIMATED: +2% to +5% from premium alumni spending patterns. Midpoint 4%.",
+      "rivalry_hype": "ESTIMATED from REAL: +5% to +12% rivalry per-cap boost (early arrival, celebration). Midpoint 8%."
+    }
+  },
+  "sport_multipliers": {
+    "_source": "NASC: basketball/indoor per-cap is 85-90% of football. Baseball/soccer further reduced.",
+    "football": 1.00,
+    "basketball": 0.87,
+    "volleyball": 0.75,
+    "baseball": 0.70,
+    "soccer": 0.65,
+    "hockey": 0.90
+  }
+}

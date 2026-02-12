@@ -1,0 +1,15 @@
+{
+  "_source": "Ohio Stadium defaults. Capacity: OSU Athletics official (102,780). Concessions: ALSD/NASC/Levy industry benchmarks. See venues.json for per-venue configs.",
+  "venue_name": "Ohio Stadium",
+  "capacity": 102780,
+  "concessions": {
+    "stands_total": 70,
+    "default_stands_open_pct": 85,
+    "default_staff_per_stand": 6,
+    "service_rate_customers_per_staff_per_min": 0.55,
+    "express_lane_service_boost_pct": 20
+  },
+  "crowd": {
+    "default_crowd_energy": 78
+  }
+}
